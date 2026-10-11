@@ -5,17 +5,23 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node .",
-    "dev": "nodemon --watch src --ext js --exec node ."
+    "dev": "nodemon --watch src --ext js --exec node .",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run lint && npm run format:check"
   },
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": "^22.13.0 || >=24.0.0"
   },
   "dependencies": {
     "dotenv": "^18.0.4",
     "telegraf": "^4.16.3"
   },
   "devDependencies": {
-    "nodemon": "^3.1.14"
+    "eslint": "^10.12.0",
+    "nodemon": "^3.1.14",
+    "prettier": "^3.8.1"
   }
 }

@@ -1,6 +1,8 @@
 import { readFile } from 'node:fs/promises';
-const migrations = [{
-  version: 1, sql: `
+const migrations = [
+  {
+    version: 1,
+    sql: `
   CREATE TABLE users (
     telegram_id TEXT PRIMARY KEY,
     accepted_at TEXT,
@@ -17,8 +19,11 @@ const migrations = [{
   );
   CREATE INDEX products_active_order ON products(is_active, sort_order, id);
   CREATE TABLE app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-` }, {
-  version: 2, sql: `
+`,
+  },
+  {
+    version: 2,
+    sql: `
   ALTER TABLE users ADD COLUMN balance_minor INTEGER NOT NULL DEFAULT 0
     CHECK (typeof(balance_minor) = 'integer' AND balance_minor BETWEEN 0 AND 9007199254740991);
   CREATE TABLE purchases (
@@ -34,19 +39,28 @@ const migrations = [{
       CHECK (julianday(purchased_at) IS NOT NULL)
   );
   CREATE INDEX purchases_user_date ON purchases(telegram_id, purchased_at DESC, id DESC);
-` }, {
-  version: 3, sql: `
+`,
+  },
+  {
+    version: 3,
+    sql: `
   ALTER TABLE products ADD COLUMN original_price_minor INTEGER
     CHECK (original_price_minor IS NULL OR (typeof(original_price_minor) = 'integer' AND original_price_minor >= 0));
   ALTER TABLE products ADD COLUMN slug TEXT;
   CREATE UNIQUE INDEX products_slug ON products(slug) WHERE slug IS NOT NULL;
-` }, {
-  version: 4, sql: `
+`,
+  },
+  {
+    version: 4,
+    sql: `
   ALTER TABLE purchases ADD COLUMN purchase_callback_id TEXT;
   CREATE UNIQUE INDEX purchases_callback_id ON purchases(purchase_callback_id)
     WHERE purchase_callback_id IS NOT NULL;
-` }, {
-  version: 5, sql: `
+`,
+  },
+  {
+    version: 5,
+    sql: `
   CREATE TABLE admins (
     telegram_id TEXT PRIMARY KEY CHECK (telegram_id GLOB '[1-9]*' AND telegram_id NOT GLOB '*[^0-9]*'),
     added_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -61,23 +75,32 @@ const migrations = [{
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
   );
   CREATE INDEX admin_balance_user_date ON admin_balance_transactions(telegram_id, created_at DESC);
-` }, {
-  version: 6, sql: `
+`,
+  },
+  {
+    version: 6,
+    sql: `
   ALTER TABLE users ADD COLUMN username TEXT;
   ALTER TABLE users ADD COLUMN first_name TEXT;
   ALTER TABLE users ADD COLUMN last_name TEXT;
   ALTER TABLE users ADD COLUMN registered_at TEXT;
   UPDATE users SET registered_at = COALESCE(accepted_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
   CREATE INDEX users_registered_order ON users(registered_at, telegram_id);
-` }, {
-  version: 7, sql: `
+`,
+  },
+  {
+    version: 7,
+    sql: `
   ALTER TABLE purchases ADD COLUMN product_id INTEGER REFERENCES products(id) ON DELETE RESTRICT;
   UPDATE purchases SET product_id = (
     SELECT products.id FROM products WHERE lower(trim(products.title)) = lower(trim(purchases.product_title)) ORDER BY products.id LIMIT 1
   ) WHERE product_id IS NULL;
   CREATE INDEX purchases_user_product ON purchases(telegram_id, product_id);
-` }, {
-  version: 8, sql: `
+`,
+  },
+  {
+    version: 8,
+    sql: `
   -- Переход с копеек на целые рубли. Баланс округляется вниз, цены и суммы к ближайшему рублю.
   UPDATE users SET balance_minor = balance_minor / 100;
   ALTER TABLE users RENAME COLUMN balance_minor TO balance;
@@ -91,8 +114,11 @@ const migrations = [{
     balance_after_minor = balance_after_minor / 100;
   ALTER TABLE admin_balance_transactions RENAME COLUMN amount_minor TO amount;
   ALTER TABLE admin_balance_transactions RENAME COLUMN balance_after_minor TO balance_after;
-` }, {
-  version: 9, sql: `
+`,
+  },
+  {
+    version: 9,
+    sql: `
   ALTER TABLE purchases ADD COLUMN invite_link TEXT;
   ALTER TABLE purchases ADD COLUMN status TEXT NOT NULL DEFAULT 'completed'
     CHECK (status IN ('pending', 'completed'));
@@ -118,14 +144,20 @@ const migrations = [{
     message_id INTEGER NOT NULL,
     PRIMARY KEY (top_up_id, chat_id, message_id)
   );
-` }, {
-  version: 10, sql: `
+`,
+  },
+  {
+    version: 10,
+    sql: `
   -- Блокировка пользователей администраторами.
   ALTER TABLE users ADD COLUMN banned_at TEXT;
   ALTER TABLE users ADD COLUMN banned_by TEXT;
   CREATE INDEX top_ups_pending ON top_ups(method, status, created_at, id);
-` }, {
-  version: 11, sql: `
+`,
+  },
+  {
+    version: 11,
+    sql: `
   CREATE TABLE discounts (
     scope TEXT PRIMARY KEY,
     product_id INTEGER UNIQUE REFERENCES products(id) ON DELETE CASCADE,
@@ -137,12 +169,18 @@ const migrations = [{
     CHECK ((scope = 'all' AND product_id IS NULL) OR
       (product_id IS NOT NULL AND scope = 'product:' || product_id))
   );
-` }, {
-  version: 12, sql: `
+`,
+  },
+  {
+    version: 12,
+    sql: `
   -- Удаляем рекламную цену-заглушку. Базовая price и настройки скидок не меняются.
   ALTER TABLE products DROP COLUMN original_price;
-` }, {
-  version: 13, sql: `
+`,
+  },
+  {
+    version: 13,
+    sql: `
   CREATE TABLE broadcast_jobs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     actor_id TEXT NOT NULL,
@@ -169,59 +207,76 @@ const migrations = [{
   );
   CREATE INDEX broadcast_recipients_pending ON broadcast_recipients(job_id, status, next_at);
   CREATE TABLE broadcast_meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
-` }];
+`,
+  },
+];
 export function migrateSchema(db) {
   db.exec('BEGIN IMMEDIATE');
   try {
     const version = db.prepare('PRAGMA user_version').get().user_version;
-    if (version > migrations.at(-1).version) throw new Error('База новее приложения: обновите код.');
+    if (version > migrations.at(-1).version)
+      throw new Error('База новее приложения: обновите код.');
     for (const migration of migrations) {
       if (migration.version <= version) continue;
       db.exec(migration.sql);
       db.exec(`PRAGMA user_version = ${migration.version}`);
     }
     db.exec('COMMIT');
-  } catch (error) { db.exec('ROLLBACK'); throw error; }
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }
-// JSON участвует только в однократном импорте, не в работе бота.
 export async function importLegacyUsers(db, file) {
   const marker = db.prepare("SELECT value FROM app_meta WHERE key = 'legacy_users_imported'");
   if (marker.get() || !file) return;
   let text;
-  try { text = await readFile(file, 'utf8'); }
-  catch (error) { if (error.code === 'ENOENT') return; throw error; }
+  try {
+    text = await readFile(file, 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT') return;
+    throw error;
+  }
   const users = JSON.parse(text);
-  if (!users || typeof users !== 'object' || Array.isArray(users)) throw new Error('users.json должен содержать объект.');
+  if (!users || typeof users !== 'object' || Array.isArray(users))
+    throw new Error('users.json должен содержать объект.');
   const rows = Object.entries(users).map(([id, user]) => {
     if (!/^[1-9]\d*$/.test(id) || !user || typeof user !== 'object' || Array.isArray(user)) {
       throw new Error('Некорректная запись в users.json.');
     }
     const acceptedAt = user.acceptedAt ?? null;
-    if (acceptedAt !== null && (typeof acceptedAt !== 'string' || !Number.isFinite(Date.parse(acceptedAt)))) {
+    if (
+      acceptedAt !== null &&
+      (typeof acceptedAt !== 'string' || !Number.isFinite(Date.parse(acceptedAt)))
+    ) {
       throw new Error(`Некорректная дата согласия пользователя ${id}.`);
     }
     const version = user.rulesVersion ?? (acceptedAt ? 1 : 0);
-    if (!Number.isSafeInteger(version) || version < 0) throw new Error(`Некорректная версия правил пользователя ${id}.`);
+    if (!Number.isSafeInteger(version) || version < 0)
+      throw new Error(`Некорректная версия правил пользователя ${id}.`);
     return [id, acceptedAt, version];
   });
   db.exec('BEGIN IMMEDIATE');
   try {
     if (!marker.get()) {
-      const insert = db.prepare(`INSERT INTO users (telegram_id, accepted_at, rules_version) VALUES (?, ?, ?)
+      const insert =
+        db.prepare(`INSERT INTO users (telegram_id, accepted_at, rules_version) VALUES (?, ?, ?)
         ON CONFLICT (telegram_id) DO NOTHING`);
       for (const row of rows) insert.run(...row);
-      db.prepare("INSERT INTO app_meta (key, value) VALUES ('legacy_users_imported', ?)").run(new Date().toISOString());
+      db.prepare("INSERT INTO app_meta (key, value) VALUES ('legacy_users_imported', ?)").run(
+        new Date().toISOString(),
+      );
     }
     db.exec('COMMIT');
-  } catch (error) { db.exec('ROLLBACK'); throw error; }
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }
-
-// Добавляем начальный каталог один раз: ручные изменения цен не перезаписываются.
 export function seedInitialCatalog(db) {
   const marker = db.prepare("SELECT value FROM app_meta WHERE key = 'catalog_seed_v1'");
   if (marker.get()) return;
   const products = [
-    // Цены в рублях.
     ['dagestan-private', 'Дагестанская Приватка', 299],
     ['ingush-private', 'Ингушская Приватка', 349],
     ['chechen-private', 'Чеченская Приватка', 499],
@@ -244,9 +299,13 @@ export function seedInitialCatalog(db) {
         if (existing) update.run(slug, title, price, index, existing.id);
         else insert.run(slug, title, price, index);
       });
-      db.prepare("INSERT INTO app_meta (key, value) VALUES ('catalog_seed_v1', ?)")
-        .run(new Date().toISOString());
+      db.prepare("INSERT INTO app_meta (key, value) VALUES ('catalog_seed_v1', ?)").run(
+        new Date().toISOString(),
+      );
     }
     db.exec('COMMIT');
-  } catch (error) { db.exec('ROLLBACK'); throw error; }
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 }

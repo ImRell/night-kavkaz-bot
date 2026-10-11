@@ -1,5 +1,3 @@
-// Только новые ID пользователя, всегда строки (они превышают точность Number).
-// id: null означает обычный эмодзи без кастомной замены.
 export const EMOJI = Object.freeze({
   check: Object.freeze({ id: '5219899949281453881', fallback: '✅' }),
   lightning: Object.freeze({ id: '5219943216781995020', fallback: '⚡' }),
@@ -20,7 +18,6 @@ export const EMOJI = Object.freeze({
   bullet: Object.freeze({ id: '5294096239464295059', fallback: '🔹' }),
   back: Object.freeze({ id: '5348276504579031076', fallback: '↩️' }),
   cancel: Object.freeze({ id: '5348402067947929537', fallback: '❌' }),
-  // Впишите ID кастомного эмодзи карточки вместо null.
   card: Object.freeze({ id: '5283232570660634549', fallback: '💳' }),
   link: Object.freeze({ id: '5454419255430767770', fallback: '🔗' }),
 });
@@ -30,26 +27,26 @@ export function emoji(name) {
   return EMOJI[name];
 }
 function buttonStyle(style) {
-  if (style !== undefined && !BUTTON_STYLES.has(style)) throw new TypeError(`Неизвестный стиль кнопки: ${style}`);
+  if (style !== undefined && !BUTTON_STYLES.has(style))
+    throw new TypeError(`Неизвестный стиль кнопки: ${style}`);
   return style;
 }
-// style: 'success' (зелёная), 'danger' (красная), 'primary' (синяя).
 export function button(text, data, { icon, style } = {}) {
-  if (!data || Buffer.byteLength(data, 'utf8') > 64) throw new TypeError('Некорректный callback_data.');
+  if (!data || Buffer.byteLength(data, 'utf8') > 64)
+    throw new TypeError('Некорректный callback_data.');
   return { text, data, icon: icon ? emoji(icon) : undefined, style: buttonStyle(style) };
 }
 export function urlButton(text, url, { icon, style } = {}) {
-  if (typeof url !== 'string' || !/^https:\/\//.test(url)) throw new TypeError('Некорректная ссылка кнопки.');
+  if (typeof url !== 'string' || !/^https:\/\//.test(url))
+    throw new TypeError('Некорректная ссылка кнопки.');
   return { text, url, icon: icon ? emoji(icon) : undefined, style: buttonStyle(style) };
 }
-// Форматирование через entities, без HTML и интерпретации пользовательского имени.
 export function bold(text) {
   return { type: 'bold', text: String(text) };
 }
 export function strikethrough(text) {
   return { type: 'strikethrough', text: String(text) };
 }
-// Моноширинный текст: в Telegram копируется по нажатию.
 export function code(text) {
   return { type: 'code', text: String(text) };
 }
@@ -59,23 +56,37 @@ export function renderScreen(screen, customEmojiEnabled = true) {
   for (const part of screen.parts) {
     if (typeof part === 'string') text += part;
     else if (part.type === 'bold' || part.type === 'strikethrough' || part.type === 'code') {
-      if (part.text.length) entities.push({ type: part.type, offset: text.length, length: part.text.length });
+      if (part.text.length)
+        entities.push({ type: part.type, offset: text.length, length: part.text.length });
       text += part.text;
-    }
-    else {
-      if (customEmojiEnabled && part.id) entities.push({ type: 'custom_emoji', offset: text.length,
-        length: part.fallback.length, custom_emoji_id: part.id });
+    } else {
+      if (customEmojiEnabled && part.id)
+        entities.push({
+          type: 'custom_emoji',
+          offset: text.length,
+          length: part.fallback.length,
+          custom_emoji_id: part.id,
+        });
       text += part.fallback;
     }
   }
-  return { text, extra: {
-    ...(entities.length ? { entities } : {}),
-    reply_markup: { inline_keyboard: (screen.rows ?? []).map(row => row.map(item => ({
-      text: item.icon && (!customEmojiEnabled || !item.icon.id) ? `${item.icon.fallback} ${item.text}` : item.text,
-      ...(item.url ? { url: item.url } : { callback_data: item.data }),
-      // Цвет задаётся только там, где он явно указан; остальные кнопки обычные.
-      ...(item.style ? { style: item.style } : {}),
-      ...(customEmojiEnabled && item.icon?.id ? { icon_custom_emoji_id: item.icon.id } : {}),
-    }))) },
-  } };
+  return {
+    text,
+    extra: {
+      ...(entities.length ? { entities } : {}),
+      reply_markup: {
+        inline_keyboard: (screen.rows ?? []).map((row) =>
+          row.map((item) => ({
+            text:
+              item.icon && (!customEmojiEnabled || !item.icon.id)
+                ? `${item.icon.fallback} ${item.text}`
+                : item.text,
+            ...(item.url ? { url: item.url } : { callback_data: item.data }),
+            ...(item.style ? { style: item.style } : {}),
+            ...(customEmojiEnabled && item.icon?.id ? { icon_custom_emoji_id: item.icon.id } : {}),
+          })),
+        ),
+      },
+    },
+  };
 }
