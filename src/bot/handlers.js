@@ -6,14 +6,23 @@ import {
 import { answerCallback } from './transport.js';
 import { isTopUpAmount } from './top-up-options.js';
 export function registerHandlers(bot, { store, transport, rulesVersion, channels = {}, hooks = {}, logger = console }) {
+  // Поддерживаем также уведомления, отправленные до появления отдельного callback.
+  const opensCatalogBelow = ctx => {
+    if (ctx.callbackQuery?.data === 'discount_products') return true;
+    const message = ctx.callbackQuery?.message;
+    return ctx.callbackQuery?.data === 'products' && message?.text?.startsWith('Новая скидка!') &&
+      Boolean(message.reply_markup?.inline_keyboard?.flat().some(button =>
+        button.callback_data === 'products' && button.text?.endsWith('Посмотреть товары')));
+  };
   const hasAgreement = record => Boolean(record?.acceptedAt && record.rulesVersion === rulesVersion);
   const purchasedProductIds = userId => store.listPurchasedProductIds?.(userId) ?? [];
   const hasPurchasedProduct = (userId, productId) => store.hasPurchasedProduct?.(userId, productId) ?? false;
-  async function requireAgreement(ctx) {
+  async function requireAgreement(ctx, replyBelow = false) {
     const record = store.get(ctx.from.id);
     if (hasAgreement(record)) return record;
     await answerCallback(ctx, 'Сначала подтвердите возраст и согласие с правилами.');
-    await transport.show(ctx, welcomeScreen());
+    if (replyBelow) await transport.reply(ctx, welcomeScreen());
+    else await transport.show(ctx, welcomeScreen());
     return null;
   }
   bot.use(async (ctx, next) => {
@@ -40,7 +49,8 @@ export function registerHandlers(bot, { store, transport, rulesVersion, channels
       const message = ctx.callbackQuery?.message || ctx.message;
       if (ctx.callbackQuery) {
         await answerCallback(ctx, 'Бот временно на технических работах.');
-        await transport.show(ctx, maintenanceScreen());
+        if (opensCatalogBelow(ctx)) await transport.reply(ctx, maintenanceScreen());
+        else await transport.show(ctx, maintenanceScreen());
       } else if (message) {
         await transport.reply(ctx, maintenanceScreen());
       }
@@ -50,7 +60,8 @@ export function registerHandlers(bot, { store, transport, rulesVersion, channels
     if (store.isBanned(ctx.from.id) && !store.isAdmin(ctx.from.id)) {
       if (ctx.callbackQuery) {
         await answerCallback(ctx, 'Ваш аккаунт заблокирован.', { show_alert: true });
-        await transport.show(ctx, bannedScreen());
+        if (opensCatalogBelow(ctx)) await transport.reply(ctx, bannedScreen());
+        else await transport.show(ctx, bannedScreen());
       } else if (ctx.message) {
         await transport.reply(ctx, bannedScreen());
       }
@@ -74,12 +85,16 @@ export function registerHandlers(bot, { store, transport, rulesVersion, channels
     await answerCallback(ctx);
     await transport.show(ctx, menuScreen(ctx.from, store.isAdmin(ctx.from.id)));
   });
-  async function showProducts(ctx) {
-    if (!(await requireAgreement(ctx))) return;
+  async function showProducts(ctx, replyBelow = false) {
+    if (!(await requireAgreement(ctx, replyBelow))) return;
     await answerCallback(ctx);
-    await transport.show(ctx, productsScreen(store.listProducts(), purchasedProductIds(ctx.from.id)));
+    const screen = productsScreen(store.listProducts(), purchasedProductIds(ctx.from.id));
+    if (replyBelow) await transport.reply(ctx, screen);
+    else await transport.show(ctx, screen);
   }
-  bot.action('products', ctx => showProducts(ctx));
+  bot.action('products', ctx => showProducts(ctx, opensCatalogBelow(ctx)));
+  // Уведомление о скидке остаётся в истории, каталог приходит отдельным сообщением.
+  bot.action('discount_products', ctx => showProducts(ctx, true));
   bot.action(/^product:(\d{1,15})$/, async ctx => {
     if (!(await requireAgreement(ctx))) return;
     const product = store.getProduct(Number(ctx.match[1]));
@@ -205,7 +220,11 @@ export function registerHandlers(bot, { store, transport, rulesVersion, channels
     // Не выводим объект Telegraf целиком: он может содержать токен и персональные данные.
     console.error('Ошибка обработки обновления.', { code: error.response?.error_code ?? error.code ?? 'UNKNOWN' });
     try {
-      if (ctx.callbackQuery) { await answerCallback(ctx); await transport.show(ctx, errorScreen()); }
+      if (ctx.callbackQuery) {
+        await answerCallback(ctx);
+        if (opensCatalogBelow(ctx)) await transport.reply(ctx, errorScreen());
+        else await transport.show(ctx, errorScreen());
+      }
       else await transport.reply(ctx, errorScreen());
     } catch { console.error('Не удалось отправить сообщение об ошибке.'); }
   });

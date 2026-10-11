@@ -1,4 +1,8 @@
 import { answerCallback } from './transport.js';
+import { randomBytes } from 'node:crypto';
+import { discountBroadcastOfferScreen, discountNotificationScreen, discountBroadcastPreviewScreen } from '../ui/admin/discount-notifications.js';
+import { adminDiscountsScreen, adminDiscountScreen } from '../ui/admin/discounts.js';
+import { parseMoscowEnd } from '../discounts.js';
 import {
   adminMenuScreen, adminPromptScreen, adminAdminsScreen, adminCountScreen,
   adminLookupScreen, adminCreditResultScreen, adminBroadcastPreviewScreen,
@@ -21,6 +25,7 @@ const USERS_CANCEL = 'admin_users_cancel';
 export function registerAdminHandlers(bot, { store, transport, clock = Date.now, logger = console }) {
   const inputs = new Map();
   const drafts = new Map();
+  const discountOffers = new Map();
   const admin = ctx => Boolean(ctx.from && ctx.chat?.type === 'private' && store.isAdmin(ctx.from.id));
 
   async function deny(ctx) {
@@ -89,8 +94,96 @@ export function registerAdminHandlers(bot, { store, transport, clock = Date.now,
     await answerCallback(ctx);
     await showMenu(ctx);
   });
+  // ---------- Временные процентные скидки ----------
+  const discountTarget = value => value === 'all' ? null : Number(value);
+  async function showDiscounts(ctx, page = 0) {
+    if (!admin(ctx)) return deny(ctx);
+    inputs.delete(String(ctx.from.id));
+    await answerCallback(ctx);
+    await transport.show(ctx, adminDiscountsScreen(store, page));
+  }
+  bot.action('admin_discounts', ctx => showDiscounts(ctx));
+  bot.action(/^admin_discounts:(\d{1,6})$/, ctx => showDiscounts(ctx, Number(ctx.match[1])));
+  bot.action(/^admin_discount:(all|[1-9]\d{0,14})$/, async ctx => {
+    if (!admin(ctx)) return deny(ctx);
+    inputs.delete(String(ctx.from.id));
+    await answerCallback(ctx);
+    await transport.show(ctx, adminDiscountScreen(store, discountTarget(ctx.match[1])));
+  });
+  bot.action(/^admin_discount_set:(all|[1-9]\d{0,14})$/, async ctx => {
+    if (!admin(ctx)) return deny(ctx);
+    const productId = discountTarget(ctx.match[1]);
+    if (productId !== null && !store.getProduct(productId)) {
+      return answerCallback(ctx, 'Товар недоступен.', { show_alert: true });
+    }
+    discountOffers.delete(String(ctx.from.id));
+    if (drafts.get(String(ctx.from.id))?.discountNotice) drafts.delete(String(ctx.from.id));
+    await startInput(ctx, 'discount_percent', 'Процент скидки',
+      'Введите целый процент от 1 до 100. Следующим шагом укажите окончание скидки по Москве. До завершения обоих шагов текущая скидка не изменится.',
+      { productId, cancelData: `admin_discount:${ctx.match[1]}` });
+  });
+  bot.action(/^admin_discount_off:(all|[1-9]\d{0,14})$/, async ctx => {
+    if (!admin(ctx)) return deny(ctx);
+    inputs.delete(String(ctx.from.id));
+    const productId = discountTarget(ctx.match[1]);
+    const changed = store.disableDiscount(ctx.from.id, productId);
+    await answerCallback(ctx, changed ? 'Скидка отключена.' : 'Скидка уже отключена.');
+    await transport.show(ctx, adminDiscountScreen(store, productId));
+  });
+
+  function validDiscountNotice(notice) {
+    const current = store.getDiscount(notice.productId);
+    return Boolean(current?.active && current.percent === notice.percent && current.endsAt === notice.endsAt &&
+      current.updatedAt === notice.updatedAt && current.updatedBy === notice.updatedBy &&
+      (notice.productId === null || store.getProduct(notice.productId)));
+  }
+  async function unavailableNotice(ctx, productId) {
+    await answerCallback(ctx, 'Предложение устарело или скидка изменена/отключена. Рассылка не отправлена.', { show_alert: true });
+    await transport.show(ctx, adminDiscountScreen(store, productId));
+  }
+  bot.action(/^admin_discount_notify:(yes|no):([a-f0-9]{12})$/, async ctx => {
+    if (!admin(ctx)) return deny(ctx);
+    const actor = String(ctx.from.id);
+    const offer = discountOffers.get(actor);
+    if (!offer || offer.token !== ctx.match[2]) {
+      return answerCallback(ctx, 'Это предложение уже закрыто или устарело.', { show_alert: true });
+    }
+    discountOffers.delete(actor); // Одно предложение нельзя подтвердить повторно.
+    if (ctx.match[1] === 'no') {
+      await answerCallback(ctx, 'Скидка сохранена без рассылки.');
+      await transport.show(ctx, adminDiscountScreen(store, offer.productId));
+      return;
+    }
+    if (offer.createdAt + INPUT_TTL_MS < clock() || !validDiscountNotice(offer)) {
+      return unavailableNotice(ctx, offer.productId);
+    }
+    const notification = discountNotificationScreen(store, offer.productId, offer);
+    const rendered = renderScreen(notification, false);
+    const recipients = store.listOrdinaryUserIds();
+    drafts.set(actor, {
+      text: rendered.text, notification, recipients, createdAt: clock(),
+      discountNotice: offer, token: offer.token
+    });
+    await answerCallback(ctx);
+    await transport.show(ctx, discountBroadcastPreviewScreen(notification, recipients.length, offer.token));
+  });
+  bot.action(/^admin_discount_notify_cancel:([a-f0-9]{12})$/, async ctx => {
+    if (!admin(ctx)) return deny(ctx);
+    const actor = String(ctx.from.id);
+    const draft = drafts.get(actor);
+    if (!draft?.discountNotice || draft.token !== ctx.match[1]) {
+      return answerCallback(ctx, 'Этот предпросмотр уже закрыт или устарел.', { show_alert: true });
+    }
+    drafts.delete(actor);
+    await answerCallback(ctx, 'Рассылка отменена. Скидка сохранена.');
+    await transport.show(ctx, adminDiscountScreen(store, draft.discountNotice.productId));
+  });
+  bot.action(/^admin_discount_send:([a-f0-9]{12})$/, ctx => confirmBroadcast(ctx, ctx.match[1]));
+
   bot.action('admin_broadcast', async ctx => {
     if (!admin(ctx)) return deny(ctx);
+    drafts.delete(String(ctx.from.id));
+    discountOffers.delete(String(ctx.from.id));
     await startInput(ctx, 'broadcast', 'Новая рассылка',
       'Отправьте текст для зарегистрированных пользователей. Максимум 3500 символов. Перед отправкой будет предпросмотр.');
   });
@@ -248,26 +341,57 @@ export function registerAdminHandlers(bot, { store, transport, clock = Date.now,
     await answerCallback(ctx, 'Рассылка отменена.');
     await showMenu(ctx);
   });
-  bot.action('admin_broadcast_confirm', async ctx => {
+  bot.action('admin_broadcast_confirm', ctx => confirmBroadcast(ctx));
+  async function confirmBroadcast(ctx, expectedToken) {
     if (!admin(ctx)) return deny(ctx);
     const actor = String(ctx.from.id);
     inputs.delete(actor);
     const draft = drafts.get(actor);
+    if ((expectedToken && (!draft?.discountNotice || draft.token !== expectedToken)) ||
+      (!expectedToken && draft?.discountNotice)) {
+      return answerCallback(ctx, 'Этот предпросмотр уже закрыт или устарел.', { show_alert: true });
+    }
     if (!draft || draft.createdAt + INPUT_TTL_MS < clock()) {
       drafts.delete(actor);
       await answerCallback(ctx, 'Предпросмотр устарел. Создайте рассылку заново.', { show_alert: true });
       await showMenu(ctx);
       return;
     }
+    if (draft.discountNotice && !validDiscountNotice(draft.discountNotice)) {
+      drafts.delete(actor);
+      return unavailableNotice(ctx, draft.discountNotice.productId);
+    }
+    if (draft.discountNotice && draft.discountNotice.productId !== null) {
+      const notification = renderScreen(discountNotificationScreen(store, draft.discountNotice.productId, draft.discountNotice), false);
+      if (notification.text !== draft.text) {
+        drafts.delete(actor);
+        await answerCallback(ctx, 'Цена товара изменилась. Установите скидку заново для нового предпросмотра.', { show_alert: true });
+        await transport.show(ctx, adminDiscountScreen(store, draft.discountNotice.productId));
+        return;
+      }
+    }
     drafts.delete(actor); // Повторное нажатие не начнёт вторую рассылку.
-    const recipients = draft.recipients;
+    // Для уведомлений повторно исключаем заблокированных и новых админов перед отправкой.
+    const allowed = draft.discountNotice ? new Set(store.listOrdinaryUserIds()) : null;
+    const recipients = allowed ? draft.recipients.filter(id => allowed.has(id)) : draft.recipients;
     await answerCallback(ctx, 'Рассылка началась.');
     await transport.show(ctx, adminPromptScreen('Рассылка выполняется', `Отправляю сообщения ${recipients.length} зарегистрированным пользователям.`));
     let sent = 0;
     let failed = 0;
     for (const telegramId of recipients) {
       try {
-        await ctx.telegram.sendMessage(telegramId, draft.text);
+        if (draft.discountNotice && (!validDiscountNotice(draft.discountNotice) ||
+          store.isBanned(telegramId) || store.isAdmin(telegramId))) {
+          failed++;
+          continue;
+        }
+        if (draft.discountNotice) {
+          // Общий транспорт добавляет кастомные эмодзи и умеет повторить отправку без них,
+          // только если Telegram явно отказал в их использовании.
+          await transport.send(ctx.telegram, telegramId, draft.notification);
+        } else {
+          await ctx.telegram.sendMessage(telegramId, draft.text);
+        }
         sent++;
       } catch {
         failed++;
@@ -286,7 +410,7 @@ export function registerAdminHandlers(bot, { store, transport, clock = Date.now,
       await sleep(40);
     }
     await transport.show(ctx, adminBroadcastResultScreen({ sent, failed, total: recipients.length }));
-  });
+  }
 
   bot.on('text', async ctx => {
     if (!admin(ctx)) return;
@@ -301,6 +425,9 @@ export function registerAdminHandlers(bot, { store, transport, clock = Date.now,
     }
     if (text.toLowerCase() === '/cancel') {
       inputs.delete(actor);
+      if (state.type === 'discount_percent' || state.type === 'discount_end') {
+        return await showInputResult(ctx, state, adminDiscountScreen(store, state.productId));
+      }
       if (state.type === 'page_users' || state.type === 'page_buyers') {
         const data = state.buyersOnly ? store.listBuyers(state.returnPage ?? 0, 5) : store.listUsers(state.returnPage ?? 0, 5);
         return await showInputResult(ctx, state, adminUsersScreen(data, Boolean(state.buyersOnly)));
@@ -308,6 +435,38 @@ export function registerAdminHandlers(bot, { store, transport, clock = Date.now,
       if (state.type === 'page_admins') return await showInputResult(ctx, state, adminAdminsScreen(store.listAdminPage(state.returnPage ?? 0, 5)));
       if (USER_TOOL_INPUTS.has(state.type)) return await showInputResult(ctx, state, adminUsersScreen(store.listUsers(0, 5), false));
       await showInputResult(ctx, state, adminMenuScreen(store.isMaintenanceMode(), store.pendingReceiptCount()));
+      return;
+    }
+    if (state.type === 'discount_percent') {
+      const percent = /^\d{1,3}$/.test(text) ? Number(text) : NaN;
+      if (!Number.isInteger(percent) || percent < 1 || percent > 100) {
+        await showInputResult(ctx, state, adminPromptScreen('Процент скидки',
+          'Введите целое число от 1 до 100 или /cancel.', state.cancelData));
+        return;
+      }
+      inputs.set(actor, { ...state, type: 'discount_end', percent, createdAt: clock() });
+      await showInputResult(ctx, state, adminPromptScreen('Окончание скидки',
+        `Скидка: ${percent}%. Введите будущую дату и время по Москве в формате ДД.ММ.ГГГГ ЧЧ:ММ (например: 31.12.2027 23:59). Для отмены — /cancel.`, state.cancelData));
+      return;
+    }
+    if (state.type === 'discount_end') {
+      let endsAt;
+      try {
+        endsAt = parseMoscowEnd(text, clock());
+        store.setDiscount(actor, state.productId, state.percent, endsAt);
+      } catch (error) {
+        // Only validation failures are shown; unexpected database errors reach bot.catch.
+        if (!(error instanceof TypeError) && error.message !== 'Товар недоступен.') throw error;
+        await showInputResult(ctx, state, adminPromptScreen('Окончание скидки',
+          error.message + ' Для отмены — /cancel.', state.cancelData));
+        return;
+      }
+      inputs.delete(actor);
+      const discount = store.getDiscount(state.productId);
+      const token = randomBytes(6).toString('hex');
+      drafts.delete(actor);
+      discountOffers.set(actor, { ...discount, productId: state.productId, token, createdAt: clock() });
+      await showInputResult(ctx, state, discountBroadcastOfferScreen(store, state.productId, token));
       return;
     }
     if (state.type === 'page_users' || state.type === 'page_buyers' || state.type === 'page_admins') {
@@ -365,7 +524,7 @@ export function registerAdminHandlers(bot, { store, transport, clock = Date.now,
       if (result.status === 'added') {
         const notification = {
           parts: [emoji('lock'), ' ', { type: 'bold', text: 'Вас назначили администратором Night Kavkaz.' }, '\n\n',
-            emoji('check'), ' Теперь вам доступна админ-панель бота.'],
+          emoji('check'), ' Теперь вам доступна админ-панель бота.'],
           rows: [[{ text: 'Открыть панель администратора', data: 'admin_menu', icon: emoji('lock') }]],
         };
         const rendered = renderScreen(notification);

@@ -1,13 +1,14 @@
 import { DatabaseSync } from 'node:sqlite';
 import { mkdir, chmod } from 'node:fs/promises';
 import { dirname } from 'node:path';
+import { discountedPrice } from './discounts.js';
 import { migrateSchema, importLegacyUsers, seedInitialCatalog } from './database/migrations.js';
 function telegramId(id) {
   const value = String(id);
   if (!/^[1-9]\d*$/.test(value)) throw new TypeError('Некорректный Telegram ID.');
   return value;
 }
-export async function createStore(file, { legacyPath, bootstrapAdminIds = [] } = {}) {
+export async function createStore(file, { legacyPath, bootstrapAdminIds = [], clock = Date.now } = {}) {
   await mkdir(dirname(file), { recursive: true, mode: 0o700 });
   const db = new DatabaseSync(file);
   try {
@@ -34,12 +35,38 @@ export async function createStore(file, { legacyPath, bootstrapAdminIds = [] } =
           THEN excluded.accepted_at ELSE users.accepted_at END,
         rules_version = excluded.rules_version,
         registered_at = COALESCE(users.registered_at, excluded.registered_at)`);
-    const listProducts = db.prepare(`SELECT id, slug, title, description, price,
-      original_price AS originalPrice, currency
+    const listProducts = db.prepare(`SELECT id, slug, title, description, price, currency
       FROM products WHERE is_active = 1 ORDER BY sort_order, id`);
-    const getProduct = db.prepare(`SELECT id, slug, title, description, price,
-      original_price AS originalPrice, currency
+    const getProduct = db.prepare(`SELECT id, slug, title, description, price, currency
       FROM products WHERE id = ? AND is_active = 1`);
+    const getDiscountQuery = db.prepare(`SELECT scope, percent, ends_at AS endsAt,
+      enabled, updated_by AS updatedBy, updated_at AS updatedAt FROM discounts WHERE scope = ?`);
+    const saveDiscountQuery = db.prepare(`INSERT INTO discounts
+      (scope, product_id, percent, ends_at, enabled, updated_by, updated_at) VALUES (?, ?, ?, ?, 1, ?, ?)
+      ON CONFLICT(scope) DO UPDATE SET percent = excluded.percent, ends_at = excluded.ends_at,
+        enabled = 1, updated_by = excluded.updated_by, updated_at = excluded.updated_at`);
+    const disableDiscountQuery = db.prepare(`UPDATE discounts SET enabled = 0, updated_by = ?, updated_at = ?
+      WHERE scope = ? AND enabled = 1`);
+    function scopeOf(productId) {
+      if (productId === null) return 'all';
+      if (!Number.isSafeInteger(productId) || productId < 1) throw new TypeError('Некорректный ID товара.');
+      return `product:${productId}`;
+    }
+    function discountState(productId, now = clock()) {
+      const row = getDiscountQuery.get(scopeOf(productId));
+      return row ? { ...row, active: Boolean(row.enabled && Date.parse(row.endsAt) > now) } : null;
+    }
+    function applyDiscount(product, now = clock(), global = discountState(null, now)) {
+      if (!product) return product;
+      const individual = discountState(product.id, now);
+      const discount = individual?.active ? individual : global?.active ? global : null;
+      if (!discount) return { ...product, basePrice: product.price, discountPercent: null, discountEndsAt: null };
+      return {
+        ...product, basePrice: product.price,
+        price: discountedPrice(product.price, discount.percent), discountPercent: discount.percent,
+        discountEndsAt: discount.endsAt, discountScope: discount.scope
+      };
+    }
     const listPurchases = db.prepare(`SELECT id, product_title AS productTitle, quantity,
       total, currency, purchased_at AS purchasedAt, invite_link AS inviteLink
       FROM purchases WHERE telegram_id = ? AND status = 'completed' ORDER BY purchased_at DESC, id DESC LIMIT ? OFFSET ?`);
@@ -191,15 +218,17 @@ export async function createStore(file, { legacyPath, bootstrapAdminIds = [] } =
     for (const { id: pendingId } of allPendingPurchases.all()) revertPurchase(pendingId);
     function pageUsers(buyersOnly, page = 0, pageSize = 5) {
       if (!Number.isSafeInteger(page) || page < 0 || !Number.isSafeInteger(pageSize) ||
-          pageSize < 1 || pageSize > 10 || !Number.isSafeInteger(page * pageSize)) {
+        pageSize < 1 || pageSize > 10 || !Number.isSafeInteger(page * pageSize)) {
         throw new TypeError('Некорректная страница пользователей.');
       }
       const total = (buyersOnly ? buyersCountQuery : userCountQuery).get().count;
       const lastPage = Math.max(0, Math.ceil(total / pageSize) - 1);
       const safePage = Math.min(page, lastPage);
       const rows = (buyersOnly ? pageBuyersQuery : pageUsersQuery).all(pageSize + 1, safePage * pageSize);
-      return { items: rows.slice(0, pageSize), hasPrev: safePage > 0,
-        hasNext: rows.length > pageSize, page: safePage, pageSize, total };
+      return {
+        items: rows.slice(0, pageSize), hasPrev: safePage > 0,
+        hasNext: rows.length > pageSize, page: safePage, pageSize, total
+      };
     }
     let closed = false;
     return {
@@ -344,8 +373,10 @@ export async function createStore(file, { legacyPath, bootstrapAdminIds = [] } =
           const rejectedIds = pendingCardTopUpIdsOfUser.all(target).map(row => row.id);
           for (const topUpId of rejectedIds) reviewTopUpQuery.run('rejected', actor, topUpId);
           db.exec('COMMIT');
-          return { status: 'banned', telegramId: target, user: registered,
-            rejectedTopUps: rejectedIds.map(topUpId => getTopUpQuery.get(topUpId)) };
+          return {
+            status: 'banned', telegramId: target, user: registered,
+            rejectedTopUps: rejectedIds.map(topUpId => getTopUpQuery.get(topUpId))
+          };
         } catch (error) { db.exec('ROLLBACK'); throw error; }
       },
       unbanUser(adminId, userQuery) {
@@ -371,22 +402,46 @@ export async function createStore(file, { legacyPath, bootstrapAdminIds = [] } =
       pendingReceiptCount() { return pendingReceiptsCountQuery.get().count; },
       listPendingReceipts(page = 0, pageSize = 5) {
         if (!Number.isSafeInteger(page) || page < 0 || !Number.isSafeInteger(pageSize) ||
-            pageSize < 1 || pageSize > 10 || !Number.isSafeInteger(page * pageSize)) {
+          pageSize < 1 || pageSize > 10 || !Number.isSafeInteger(page * pageSize)) {
           throw new TypeError('Некорректная страница чеков.');
         }
         const total = pendingReceiptsCountQuery.get().count;
         const lastPage = Math.max(0, Math.ceil(total / pageSize) - 1);
         const safePage = Math.min(page, lastPage);
         const rows = pagePendingReceiptsQuery.all(pageSize + 1, safePage * pageSize);
-        return { items: rows.slice(0, pageSize), hasPrev: safePage > 0,
-          hasNext: rows.length > pageSize, page: safePage, pageSize, total };
+        return {
+          items: rows.slice(0, pageSize), hasPrev: safePage > 0,
+          hasNext: rows.length > pageSize, page: safePage, pageSize, total
+        };
       },
       accept(id, rulesVersion = 1) {
         if (!Number.isSafeInteger(rulesVersion) || rulesVersion < 1) throw new TypeError('Некорректная версия правил.');
         accept.run(telegramId(id), new Date().toISOString(), rulesVersion);
         return getUser.get(telegramId(id));
       },
-      listProducts() { return { items: listProducts.all(), hasNext: false }; },
+      getDiscount(productId = null) { return discountState(productId); },
+      setDiscount(adminId, productId, percent, endsAt) {
+        const actor = telegramId(adminId);
+        if (!isAdminQuery.get(actor)) throw new Error('Доступ только для администраторов.');
+        const scope = scopeOf(productId);
+        if (productId !== null && !getProduct.get(productId)) throw new Error('Товар недоступен.');
+        if (!Number.isInteger(percent) || percent < 1 || percent > 100) throw new TypeError('Введите целый процент от 1 до 100.');
+        const timestamp = typeof endsAt === 'string' ? Date.parse(endsAt) : NaN;
+        const now = clock();
+        if (!Number.isFinite(timestamp) || timestamp <= now) throw new TypeError('Окончание скидки должно быть в будущем.');
+        saveDiscountQuery.run(scope, productId, percent, new Date(timestamp).toISOString(), actor, new Date(now).toISOString());
+        return discountState(productId, now);
+      },
+      disableDiscount(adminId, productId = null) {
+        const actor = telegramId(adminId);
+        if (!isAdminQuery.get(actor)) throw new Error('Доступ только для администраторов.');
+        return disableDiscountQuery.run(actor, new Date(clock()).toISOString(), scopeOf(productId)).changes === 1;
+      },
+      listProducts() {
+        const now = clock();
+        const global = discountState(null, now);
+        return { items: listProducts.all().map(product => applyDiscount(product, now, global)), hasNext: false };
+      },
       listPurchasedProductIds(id) { return listUserProductIdsQuery.all(telegramId(id)).map(row => row.productId); },
       hasPurchasedProduct(id, productId) {
         if (!Number.isSafeInteger(productId) || productId < 1) throw new TypeError('Некорректный ID товара.');
@@ -394,7 +449,7 @@ export async function createStore(file, { legacyPath, bootstrapAdminIds = [] } =
       },
       getProduct(id) {
         if (!Number.isSafeInteger(id) || id < 1) throw new TypeError('Некорректный ID товара.');
-        return getProduct.get(id);
+        return applyDiscount(getProduct.get(id));
       },
       purchaseProduct(id, productId, callbackId, expectedPrice) {
         const user = telegramId(id);
@@ -413,7 +468,7 @@ export async function createStore(file, { legacyPath, bootstrapAdminIds = [] } =
             db.exec('COMMIT');
             return { status: 'already_processed', balance: balance, purchaseId: previous.id };
           }
-          const product = productForPurchase.get(productId);
+          const product = applyDiscount(productForPurchase.get(productId));
           if (!product) {
             db.exec('COMMIT');
             return { status: 'unavailable' };
@@ -426,8 +481,10 @@ export async function createStore(file, { legacyPath, bootstrapAdminIds = [] } =
           if (product.price !== expectedPrice) {
             const current = balanceForPurchase.get(user);
             db.exec('COMMIT');
-            return { status: 'price_changed', balance: current?.balance ?? 0,
-              price: product.price, productId: product.id };
+            return {
+              status: 'price_changed', balance: current?.balance ?? 0,
+              price: product.price, productId: product.id
+            };
           }
           const current = balanceForPurchase.get(user);
           if (!current) {
@@ -436,21 +493,27 @@ export async function createStore(file, { legacyPath, bootstrapAdminIds = [] } =
           }
           if (current.balance < product.price) {
             db.exec('COMMIT');
-            return { status: 'insufficient_funds', balance: current.balance,
-              price: product.price, productTitle: product.title };
+            return {
+              status: 'insufficient_funds', balance: current.balance,
+              price: product.price, productTitle: product.title
+            };
           }
           const debit = debitBalance.run(product.price, user, product.price);
           if (debit.changes !== 1) {
             const freshBalance = balanceForPurchase.get(user)?.balance ?? 0;
             db.exec('COMMIT');
-            return { status: 'insufficient_funds', balance: freshBalance,
-              price: product.price, productTitle: product.title };
+            return {
+              status: 'insufficient_funds', balance: freshBalance,
+              price: product.price, productTitle: product.title
+            };
           }
           const inserted = insertPurchase.run(user, product.id, product.title, product.price, product.currency, callbackId);
           const balance = balanceForPurchase.get(user).balance;
           db.exec('COMMIT');
-          return { status: 'purchased', balance, price: product.price, currency: product.currency,
-            productTitle: product.title, productSlug: product.slug, purchaseId: Number(inserted.lastInsertRowid) };
+          return {
+            status: 'purchased', balance, price: product.price, currency: product.currency,
+            productTitle: product.title, productSlug: product.slug, purchaseId: Number(inserted.lastInsertRowid)
+          };
         } catch (error) {
           db.exec('ROLLBACK');
           throw error;
@@ -458,7 +521,7 @@ export async function createStore(file, { legacyPath, bootstrapAdminIds = [] } =
       },
       listPurchases(id, page = 0, pageSize = 5) {
         if (!Number.isSafeInteger(page) || page < 0 || !Number.isSafeInteger(pageSize) ||
-            pageSize < 1 || pageSize > 5 || !Number.isSafeInteger(page * pageSize)) {
+          pageSize < 1 || pageSize > 5 || !Number.isSafeInteger(page * pageSize)) {
           throw new TypeError('Некорректная страница покупок.');
         }
         const rows = listPurchases.all(telegramId(id), pageSize + 1, page * pageSize);

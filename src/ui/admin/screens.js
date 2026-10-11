@@ -22,6 +22,7 @@ export function adminMenuScreen(maintenanceMode = false, pendingReceipts = 0) {
         button('Администраторы', 'admin_list', { icon: 'lock' }),
         button('Пользователи', 'admin_users', { icon: 'eyes' }),
       ],
+      [button('Скидки', 'admin_discounts', { icon: 'star' })],
       [button(maintenanceMode ? 'Выключить техработы' : 'Включить техработы', 'admin_maintenance_toggle',
         { icon: maintenanceMode ? 'check' : 'warning', style: maintenanceMode ? 'success' : 'danger' })],
       [button('В главное меню', 'main_menu', { icon: 'back' })],
@@ -118,7 +119,7 @@ export function adminAdminsScreen(data, canManage = false, notice = '') {
     : data;
   const { items, page, pageSize, total, hasPrev, hasNext } = result;
   const parts = [emoji('lock'), ' ', bold(`Администраторы (${total})`), '\n',
-    emoji('bullet'), ` Страница ${page + 1} из ${Math.max(1, Math.ceil(total / pageSize))}\n\n`];
+  emoji('bullet'), ` Страница ${page + 1} из ${Math.max(1, Math.ceil(total / pageSize))}\n\n`];
   if (notice) parts.push(emoji('check'), ' ', notice, '\n\n');
   if (!items.length) parts.push('Список пуст.');
   else items.forEach((admin, index) => {
@@ -186,9 +187,9 @@ export function adminCreditResultScreen(result) {
   };
   const parts = result.status === 'credited'
     ? [emoji('check'), ' ', bold('Баланс пополнен.'), '\n\n',
-      emoji('bullet'), ` ID пользователя: ${result.telegramId}\n`,
-      emoji('bullet'), ` Зачислено: ${adminMoney(result.amount)}\n`,
-      emoji('bullet'), ` Новый баланс: ${adminMoney(result.balance)}\n`,
+    emoji('bullet'), ` ID пользователя: ${result.telegramId}\n`,
+    emoji('bullet'), ` Зачислено: ${adminMoney(result.amount)}\n`,
+    emoji('bullet'), ` Новый баланс: ${adminMoney(result.balance)}\n`,
       'Операция сохранена в журнале.']
     : [emoji('warning'), ' ', messages[result.status] ?? 'Не удалось пополнить баланс.'];
   return { parts, rows: usersBackRow() };
@@ -201,17 +202,17 @@ export function adminBanResultScreen(result, query) {
     const rejected = result.rejectedTopUps?.length ?? 0;
     return {
       parts: [emoji('lock'), ' ', bold('Пользователь заблокирован.'), '\n\n',
-        emoji('bullet'), ` Пользователь: ${label}\n`,
-        emoji('bullet'), ' Доступ к боту закрыт, рассылки ему не приходят.',
-        ...(rejected ? ['\n', emoji('bullet'), ` Отклонено чеков на проверке: ${rejected}`] : [])],
+      emoji('bullet'), ` Пользователь: ${label}\n`,
+      emoji('bullet'), ' Доступ к боту закрыт, рассылки ему не приходят.',
+      ...(rejected ? ['\n', emoji('bullet'), ` Отклонено чеков на проверке: ${rejected}`] : [])],
       rows: usersBackRow(),
     };
   }
   if (result.status === 'unbanned') {
     return {
       parts: [emoji('check'), ' ', bold('Пользователь разблокирован.'), '\n\n',
-        emoji('bullet'), ` Пользователь: ${label}\n`,
-        emoji('bullet'), ' Доступ к боту снова открыт.'],
+      emoji('bullet'), ` Пользователь: ${label}\n`,
+      emoji('bullet'), ' Доступ к боту снова открыт.'],
       rows: usersBackRow(),
     };
   }
@@ -260,7 +261,7 @@ export function adminReceiptsScreen({ items, page, pageSize, total, hasPrev, has
 export function adminBroadcastPreviewScreen(message, recipientCount) {
   return {
     parts: [emoji('warning'), ' ', bold('Проверьте рассылку'), '\n',
-      emoji('bullet'), ` Получателей: ${recipientCount}\n\n`, message],
+    emoji('bullet'), ` Получателей: ${recipientCount}\n\n`, message],
     rows: [[
       button('Отправить всем', 'admin_broadcast_confirm', { icon: 'check' }),
       button('Отмена', 'admin_broadcast_cancel', { icon: 'cancel' }),
@@ -271,9 +272,9 @@ export function adminBroadcastPreviewScreen(message, recipientCount) {
 export function adminBroadcastResultScreen({ sent, failed, total }) {
   return {
     parts: [emoji('check'), ' ', bold('Рассылка завершена.'), '\n\n',
-      emoji('bullet'), ` Всего получателей: ${total}\n`,
-      emoji('bullet'), ` Доставлено: ${sent}\n`,
-      emoji('bullet'), ` Не доставлено: ${failed}`],
+    emoji('bullet'), ` Всего получателей: ${total}\n`,
+    emoji('bullet'), ` Доставлено: ${sent}\n`,
+    emoji('bullet'), ` Не доставлено: ${failed}`],
     rows: backRow(),
   };
 }
@@ -296,8 +297,10 @@ export function topUpAdminCaption(topUp, user, reviewer) {
   return lines.join('\n').slice(0, 1024);
 }
 export function topUpAdminKeyboard(topUpId) {
-  return { inline_keyboard: [[
-    { text: 'Зачислить', callback_data: `topup_approve:${topUpId}`, style: 'success' },
-    { text: 'Отклонить', callback_data: `topup_reject:${topUpId}`, style: 'danger' },
-  ]] };
+  return {
+    inline_keyboard: [[
+      { text: 'Зачислить', callback_data: `topup_approve:${topUpId}`, style: 'success' },
+      { text: 'Отклонить', callback_data: `topup_reject:${topUpId}`, style: 'danger' },
+    ]]
+  };
 }

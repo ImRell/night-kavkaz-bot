@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
-const migrations = [{ version: 1, sql: `
+const migrations = [{
+  version: 1, sql: `
   CREATE TABLE users (
     telegram_id TEXT PRIMARY KEY,
     accepted_at TEXT,
@@ -16,7 +17,8 @@ const migrations = [{ version: 1, sql: `
   );
   CREATE INDEX products_active_order ON products(is_active, sort_order, id);
   CREATE TABLE app_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
-` }, { version: 2, sql: `
+` }, {
+  version: 2, sql: `
   ALTER TABLE users ADD COLUMN balance_minor INTEGER NOT NULL DEFAULT 0
     CHECK (typeof(balance_minor) = 'integer' AND balance_minor BETWEEN 0 AND 9007199254740991);
   CREATE TABLE purchases (
@@ -32,16 +34,19 @@ const migrations = [{ version: 1, sql: `
       CHECK (julianday(purchased_at) IS NOT NULL)
   );
   CREATE INDEX purchases_user_date ON purchases(telegram_id, purchased_at DESC, id DESC);
-` }, { version: 3, sql: `
+` }, {
+  version: 3, sql: `
   ALTER TABLE products ADD COLUMN original_price_minor INTEGER
     CHECK (original_price_minor IS NULL OR (typeof(original_price_minor) = 'integer' AND original_price_minor >= 0));
   ALTER TABLE products ADD COLUMN slug TEXT;
   CREATE UNIQUE INDEX products_slug ON products(slug) WHERE slug IS NOT NULL;
-` }, { version: 4, sql: `
+` }, {
+  version: 4, sql: `
   ALTER TABLE purchases ADD COLUMN purchase_callback_id TEXT;
   CREATE UNIQUE INDEX purchases_callback_id ON purchases(purchase_callback_id)
     WHERE purchase_callback_id IS NOT NULL;
-` }, { version: 5, sql: `
+` }, {
+  version: 5, sql: `
   CREATE TABLE admins (
     telegram_id TEXT PRIMARY KEY CHECK (telegram_id GLOB '[1-9]*' AND telegram_id NOT GLOB '*[^0-9]*'),
     added_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
@@ -56,20 +61,23 @@ const migrations = [{ version: 1, sql: `
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
   );
   CREATE INDEX admin_balance_user_date ON admin_balance_transactions(telegram_id, created_at DESC);
-` }, { version: 6, sql: `
+` }, {
+  version: 6, sql: `
   ALTER TABLE users ADD COLUMN username TEXT;
   ALTER TABLE users ADD COLUMN first_name TEXT;
   ALTER TABLE users ADD COLUMN last_name TEXT;
   ALTER TABLE users ADD COLUMN registered_at TEXT;
   UPDATE users SET registered_at = COALESCE(accepted_at, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
   CREATE INDEX users_registered_order ON users(registered_at, telegram_id);
-` }, { version: 7, sql: `
+` }, {
+  version: 7, sql: `
   ALTER TABLE purchases ADD COLUMN product_id INTEGER REFERENCES products(id) ON DELETE RESTRICT;
   UPDATE purchases SET product_id = (
     SELECT products.id FROM products WHERE lower(trim(products.title)) = lower(trim(purchases.product_title)) ORDER BY products.id LIMIT 1
   ) WHERE product_id IS NULL;
   CREATE INDEX purchases_user_product ON purchases(telegram_id, product_id);
-` }, { version: 8, sql: `
+` }, {
+  version: 8, sql: `
   -- Переход с копеек на целые рубли. Баланс округляется вниз, цены и суммы к ближайшему рублю.
   UPDATE users SET balance_minor = balance_minor / 100;
   ALTER TABLE users RENAME COLUMN balance_minor TO balance;
@@ -83,7 +91,8 @@ const migrations = [{ version: 1, sql: `
     balance_after_minor = balance_after_minor / 100;
   ALTER TABLE admin_balance_transactions RENAME COLUMN amount_minor TO amount;
   ALTER TABLE admin_balance_transactions RENAME COLUMN balance_after_minor TO balance_after;
-` }, { version: 9, sql: `
+` }, {
+  version: 9, sql: `
   ALTER TABLE purchases ADD COLUMN invite_link TEXT;
   ALTER TABLE purchases ADD COLUMN status TEXT NOT NULL DEFAULT 'completed'
     CHECK (status IN ('pending', 'completed'));
@@ -109,11 +118,29 @@ const migrations = [{ version: 1, sql: `
     message_id INTEGER NOT NULL,
     PRIMARY KEY (top_up_id, chat_id, message_id)
   );
-` }, { version: 10, sql: `
+` }, {
+  version: 10, sql: `
   -- Блокировка пользователей администраторами.
   ALTER TABLE users ADD COLUMN banned_at TEXT;
   ALTER TABLE users ADD COLUMN banned_by TEXT;
   CREATE INDEX top_ups_pending ON top_ups(method, status, created_at, id);
+` }, {
+  version: 11, sql: `
+  CREATE TABLE discounts (
+    scope TEXT PRIMARY KEY,
+    product_id INTEGER UNIQUE REFERENCES products(id) ON DELETE CASCADE,
+    percent INTEGER NOT NULL CHECK (typeof(percent) = 'integer' AND percent BETWEEN 1 AND 100),
+    ends_at TEXT NOT NULL CHECK (julianday(ends_at) IS NOT NULL),
+    enabled INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0, 1)),
+    updated_by TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    CHECK ((scope = 'all' AND product_id IS NULL) OR
+      (product_id IS NOT NULL AND scope = 'product:' || product_id))
+  );
+` }, {
+  version: 12, sql: `
+  -- Удаляем рекламную цену-заглушку. Базовая price и настройки скидок не меняются.
+  ALTER TABLE products DROP COLUMN original_price;
 ` }];
 export function migrateSchema(db) {
   db.exec('BEGIN IMMEDIATE');
@@ -167,11 +194,11 @@ export function seedInitialCatalog(db) {
   if (marker.get()) return;
   const products = [
     // Цены в рублях.
-    ['dagestan-private', 'Дагестанская Приватка', 299, 389],
-    ['ingush-private', 'Ингушская Приватка', 349, 499],
-    ['chechen-private', 'Чеченская Приватка', 499, 799],
-    ['covered', 'Покрытые', 549, 729],
-    ['everything', 'Всё сразу', 1349, 1999],
+    ['dagestan-private', 'Дагестанская Приватка', 299],
+    ['ingush-private', 'Ингушская Приватка', 349],
+    ['chechen-private', 'Чеченская Приватка', 499],
+    ['covered', 'Покрытые', 549],
+    ['everything', 'Всё сразу', 1349],
   ];
   db.exec('BEGIN IMMEDIATE');
   try {
@@ -179,15 +206,15 @@ export function seedInitialCatalog(db) {
       const findBySlug = db.prepare('SELECT id FROM products WHERE slug = ?');
       const findByTitle = db.prepare('SELECT id FROM products WHERE title = ? ORDER BY id LIMIT 1');
       const insert = db.prepare(`INSERT INTO products
-        (slug, title, description, price, original_price, currency, is_active, sort_order)
-        VALUES (?, ?, '', ?, ?, 'RUB', 1, ?)
+        (slug, title, description, price, currency, is_active, sort_order)
+        VALUES (?, ?, '', ?, 'RUB', 1, ?)
         ON CONFLICT(slug) WHERE slug IS NOT NULL DO NOTHING`);
       const update = db.prepare(`UPDATE products SET slug = ?, title = ?, price = ?,
-        original_price = ?, currency = 'RUB', is_active = 1, sort_order = ? WHERE id = ?`);
-      products.forEach(([slug, title, price, original], index) => {
+        currency = 'RUB', is_active = 1, sort_order = ? WHERE id = ?`);
+      products.forEach(([slug, title, price], index) => {
         const existing = findBySlug.get(slug) ?? findByTitle.get(title);
-        if (existing) update.run(slug, title, price, original, index, existing.id);
-        else insert.run(slug, title, price, original, index);
+        if (existing) update.run(slug, title, price, index, existing.id);
+        else insert.run(slug, title, price, index);
       });
       db.prepare("INSERT INTO app_meta (key, value) VALUES ('catalog_seed_v1', ?)")
         .run(new Date().toISOString());

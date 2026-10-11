@@ -25,16 +25,18 @@ export function bannedScreen() {
 }
 
 export function welcomeScreen() {
-  return { parts: [
-    emoji('folder'), ' ', bold('Приветствуем! Перед началом работы, пожалуйста, ознакомьтесь с основными правилами.'), '\n\n',
-    emoji('bullet'), ' 1.0 ', bold('Использовать бот можно только с 18 лет.'), '\n',
-    emoji('bullet'), ' 1.1 ', bold('Используйте бот только по его назначению.'), '\n',
-    emoji('bullet'), ' 1.2 ', bold('Не пытайтесь нарушить работу бота или его инфраструктуру.'), '\n',
-    emoji('bullet'), ' 1.3 ', bold('Не используйте бота для запрещённых или незаконных действий и не отправляйте спам.'), '\n\n',
-    emoji('star'), ' ', bold('Подтверждение'), '\n\n',
-    bold('Нажимая кнопку «Я согласен», вы подтверждаете, что вам исполнилось 18 лет, ознакомились с правилами и принимаете их. После подтверждения вам станет доступно главное меню бота.'),
-    '\n\n', bold('Для сохранения согласия бот хранит ваш Telegram ID и дату подтверждения.'),
-  ], rows: [[button('Я согласен', 'accept_rules', { icon: 'check' })]] };
+  return {
+    parts: [
+      emoji('folder'), ' ', bold('Приветствуем! Перед началом работы, пожалуйста, ознакомьтесь с основными правилами.'), '\n\n',
+      emoji('bullet'), ' 1.0 ', bold('Использовать бот можно только с 18 лет.'), '\n',
+      emoji('bullet'), ' 1.1 ', bold('Используйте бот только по его назначению.'), '\n',
+      emoji('bullet'), ' 1.2 ', bold('Не пытайтесь нарушить работу бота или его инфраструктуру.'), '\n',
+      emoji('bullet'), ' 1.3 ', bold('Не используйте бота для запрещённых или незаконных действий и не отправляйте спам.'), '\n\n',
+      emoji('star'), ' ', bold('Подтверждение'), '\n\n',
+      bold('Нажимая кнопку «Я согласен», вы подтверждаете, что вам исполнилось 18 лет, ознакомились с правилами и принимаете их. После подтверждения вам станет доступно главное меню бота.'),
+      '\n\n', bold('Для сохранения согласия бот хранит ваш Telegram ID и дату подтверждения.'),
+    ], rows: [[button('Я согласен', 'accept_rules', { icon: 'check' })]]
+  };
 }
 export function menuScreen(user = {}, isAdmin = false) {
   const name = user.first_name?.trim() || 'друг';
@@ -66,16 +68,16 @@ export function profileScreen(user, record) {
       emoji('question'), ' Username: ', bold(user.username ? `@${user.username}` : 'не указан'),
     ],
     rows: [[button('Пополнить баланс', 'top_up', { icon: 'lightning' })],
-      [button('Мои покупки', 'my_purchases', { icon: 'cart' })], ...back('main_menu')],
+    [button('Мои покупки', 'my_purchases', { icon: 'cart' })], ...back('main_menu')],
   };
 }
 export function topUpScreen(record) {
   const amounts = TOP_UP_AMOUNTS.map(amount => button(`${amount}₽`, `top_up_amount:${amount}`));
   return {
     parts: [emoji('lightning'), ' Пополнение баланса\n\n',
-      emoji('diamond'), ` Текущий баланс: ${money(record.balance)}\n\n`,
-      emoji('question'), ' На какую сумму пополнить баланс?\n\n',
-      emoji('bullet'), ' Оплата банковской картой или через Telegram Stars.'],
+    emoji('diamond'), ` Текущий баланс: ${money(record.balance)}\n\n`,
+    emoji('question'), ' На какую сумму пополнить баланс?\n\n',
+    emoji('bullet'), ' Оплата банковской картой или через Telegram Stars.'],
     rows: [amounts.slice(0, 2), amounts.slice(2, 4), amounts.slice(4), ...back('profile')],
   };
 }
@@ -84,10 +86,10 @@ export function topUpMethodScreen(record, amount) {
   const stars = starsForRub(amount);
   return {
     parts: [emoji('lightning'), ' Пополнение баланса\n\n',
-      emoji('check'), ' Сумма: ', bold(money(amount)), '\n',
-      emoji('star'), ` В Telegram Stars: ${stars} ⭐ (1 ⭐ = ${String(RUB_PER_STAR).replace('.', ',')} ₽)\n`,
-      emoji('diamond'), ` Текущий баланс: ${money(record.balance)}\n\n`,
-      emoji('question'), ' Выберите способ оплаты:'],
+    emoji('check'), ' Сумма: ', bold(money(amount)), '\n',
+    emoji('star'), ` В Telegram Stars: ${stars} ⭐ (1 ⭐ = ${String(RUB_PER_STAR).replace('.', ',')} ₽)\n`,
+    emoji('diamond'), ` Текущий баланс: ${money(record.balance)}\n\n`,
+    emoji('question'), ' Выберите способ оплаты:'],
     rows: [
       [button('🇷🇺 Банковская карта', `top_up_card:${amount}`)],
       [button(`Telegram Stars (${stars} ⭐)`, `top_up_stars:${amount}`, { icon: 'star' })],
@@ -98,8 +100,10 @@ export function topUpMethodScreen(record, amount) {
 export function cardTopUpScreen(amount, card) {
   if (!isTopUpAmount(amount)) throw new TypeError('Недоступная сумма пополнения.');
   if (!card) {
-    return { parts: [emoji('warning'), ' Оплата банковской картой временно недоступна. Выберите другой способ.'],
-      rows: back(`top_up_amount:${amount}`) };
+    return {
+      parts: [emoji('warning'), ' Оплата банковской картой временно недоступна. Выберите другой способ.'],
+      rows: back(`top_up_amount:${amount}`)
+    };
   }
   return {
     parts: [emoji('card'), ' ', bold('Пополнение баланса'), '\n\n',
@@ -114,11 +118,11 @@ export function cardTopUpScreen(amount, card) {
 export function receiptPromptScreen(amount) {
   return {
     parts: [emoji('card'), ' ', bold('Отправьте чек'), '\n\n',
-      emoji('bullet'), ` Сумма: ${money(amount)}\n\n`,
+    emoji('bullet'), ` Сумма: ${money(amount)}\n\n`,
       'Пришлите чек одним сообщением: фото, скриншот или документ.\n\n',
-      emoji('warning'), ' ', bold('Внимание!'), ' Отправляйте только чек нового перевода. ',
+    emoji('warning'), ' ', bold('Внимание!'), ' Отправляйте только чек нового перевода. ',
       'Если вы повторно пришлёте чек, по которому баланс уже был начислен, ',
-      bold('ваш аккаунт будет заблокирован.')],
+    bold('ваш аккаунт будет заблокирован.')],
     rows: [[button('Отмена', 'top_up_receipt_cancel', { icon: 'cancel' })]],
   };
 }
@@ -134,8 +138,8 @@ export function receiptExpiredScreen() {
 export function receiptSentScreen(topUp) {
   return {
     parts: [emoji('hourglass'), ' ', bold('Чек отправлен на проверку'), '\n\n',
-      emoji('bullet'), ` Заявка №${topUp.id}\n`,
-      emoji('bullet'), ` Сумма: ${money(topUp.amount)}\n\n`,
+    emoji('bullet'), ` Заявка №${topUp.id}\n`,
+    emoji('bullet'), ` Сумма: ${money(topUp.amount)}\n\n`,
       'Баланс пополнится после проверки оплаты администратором. Мы пришлём уведомление.'],
     rows: back('profile'),
   };
@@ -143,7 +147,7 @@ export function receiptSentScreen(topUp) {
 export function receiptTooManyScreen(topUp) {
   return {
     parts: [emoji('hourglass'), ' ', bold('Дождитесь проверки первого чека'), '\n\n',
-      ...(topUp ? [emoji('bullet'), ` Заявка №${topUp.id}\n`, emoji('bullet'), ` Сумма: ${money(topUp.amount)}\n\n`] : []),
+    ...(topUp ? [emoji('bullet'), ` Заявка №${topUp.id}\n`, emoji('bullet'), ` Сумма: ${money(topUp.amount)}\n\n`] : []),
       'Ваш чек уже на проверке у администратора. Новый чек можно будет отправить после решения по текущей заявке. ',
       'Мы пришлём уведомление.'],
     rows: back('profile'),
@@ -152,16 +156,16 @@ export function receiptTooManyScreen(topUp) {
 export function topUpApprovedScreen(topUp, balance) {
   return {
     parts: [emoji('check'), ' ', bold('Оплата подтверждена!'), '\n\n',
-      emoji('bullet'), ` Заявка №${topUp.id}\n`,
-      emoji('bullet'), ' Зачислено: ', bold(money(topUp.amount)), '\n',
-      emoji('diamond'), ' Текущий баланс: ', bold(money(balance))],
+    emoji('bullet'), ` Заявка №${topUp.id}\n`,
+    emoji('bullet'), ' Зачислено: ', bold(money(topUp.amount)), '\n',
+    emoji('diamond'), ' Текущий баланс: ', bold(money(balance))],
     rows: [[button('Товары', 'products', { icon: 'cart' })], [button('Профиль', 'profile', { icon: 'profile' })]],
   };
 }
 export function topUpRejectedScreen(topUp) {
   return {
     parts: [emoji('warning'), ' ', bold('Оплата не подтверждена'), '\n\n',
-      emoji('bullet'), ` Заявка №${topUp.id} на ${money(topUp.amount)} отклонена.\n\n`,
+    emoji('bullet'), ` Заявка №${topUp.id} на ${money(topUp.amount)} отклонена.\n\n`,
       'Если вы уверены, что перевели деньги, свяжитесь с администратором.'],
     rows: back('profile'),
   };
@@ -169,7 +173,7 @@ export function topUpRejectedScreen(topUp) {
 export function starsInvoiceSentScreen(amount) {
   return {
     parts: [emoji('star'), ' ', bold('Счёт отправлен'), '\n\n',
-      `Ниже счёт на ${starsForRub(amount)} ⭐ (${money(amount)}). Нажмите в нём кнопку оплаты. `,
+    `Ниже счёт на ${starsForRub(amount)} ⭐ (${money(amount)}). Нажмите в нём кнопку оплаты. `,
       'Баланс пополнится сразу после оплаты.'],
     rows: back(`top_up_amount:${amount}`),
   };
@@ -177,8 +181,8 @@ export function starsInvoiceSentScreen(amount) {
 export function starsCreditedScreen(result) {
   return {
     parts: [emoji('check'), ' ', bold('Баланс пополнен!'), '\n\n',
-      emoji('bullet'), ' Зачислено: ', bold(money(result.amount)), ` (${result.stars} ⭐)\n`,
-      emoji('diamond'), ' Текущий баланс: ', bold(money(result.balance))],
+    emoji('bullet'), ' Зачислено: ', bold(money(result.amount)), ` (${result.stars} ⭐)\n`,
+    emoji('diamond'), ' Текущий баланс: ', bold(money(result.balance))],
     rows: [[button('Товары', 'products', { icon: 'cart' })], [button('Профиль', 'profile', { icon: 'profile' })]],
   };
 }
@@ -210,20 +214,21 @@ export function purchasesScreen({ items, hasNext }, page = 0) {
 }
 function productPriceParts(product) {
   const current = money(product.price, product.currency);
-  const original = product.originalPrice;
-  return original !== null && original !== undefined && original > product.price
-    ? [strikethrough(money(original, product.currency)), ' ', bold(current)]
+  return product.discountPercent
+    ? [strikethrough(money(product.basePrice, product.currency)), ' ', bold(current)]
     : [bold(current)];
 }
 export function productsScreen({ items }, ownedProductIds = []) {
   const owned = new Set(ownedProductIds);
   const available = items.filter(product => !owned.has(product.id));
   const parts = [emoji('cart'), ' ', bold('Товары'), '\n\n',
-    emoji('bullet'), ' Выберите нужный вам товар:'];
+  emoji('bullet'), ' Выберите нужный вам товар:'];
   const rows = [];
   if (!available.length) parts.push('\n\nВсе товары уже приобретены.');
   else {
     for (const product of available) {
+      parts.push('\n\n', bold(product.title), '\n', ...productPriceParts(product),
+        ...(product.discountPercent ? [` (−${product.discountPercent}%)`] : []));
       const price = money(product.price, product.currency);
       const title = [...String(product.title).trim()];
       const titleBudget = Math.max(1, 64 - [...price].length - 3);
@@ -241,9 +246,9 @@ export function purchaseConfirmScreen(product, balance) {
   if (!product) return productScreen(undefined);
   return {
     parts: [emoji('question'), ' ', bold('Подтвердить покупку?'), '\n\n',
-      emoji('bullet'), ` Товар: ${product.title}\n`,
-      emoji('bullet'), ' Цена: ', ...productPriceParts(product), '\n',
-      emoji('bullet'), ` Текущий баланс: ${money(balance)}\n\n`,
+    emoji('bullet'), ` Товар: ${product.title}\n`,
+    emoji('bullet'), ' Цена: ', ...productPriceParts(product), '\n',
+    emoji('bullet'), ` Текущий баланс: ${money(balance)}\n\n`,
       'Средства будут списаны с баланса. После оплаты вы получите одноразовую ссылку для входа в канал, ',
       'она также сохранится в разделе «Мои покупки».'],
     rows: [
@@ -255,14 +260,14 @@ export function purchaseConfirmScreen(product, balance) {
 export function purchaseCompleteScreen(result) {
   return {
     parts: [emoji('check'), ' ', bold('Покупка оформлена!'), '\n\n',
-      emoji('bullet'), ` Товар: ${result.productTitle}\n`,
-      emoji('bullet'), ' Оплачено: ', bold(money(result.price, result.currency)), '\n',
-      emoji('bullet'), ' Новый баланс: ', bold(money(result.balance)), '\n',
-      emoji('bullet'), ` Номер покупки: ${result.purchaseId}\n\n`,
-      emoji('link'), ' ', bold('Ваша ссылка для входа:'), '\n', result.inviteLink, '\n\n',
-      emoji('warning'), ` ${ONE_TIME_LINK_WARNING}`],
+    emoji('bullet'), ` Товар: ${result.productTitle}\n`,
+    emoji('bullet'), ' Оплачено: ', bold(money(result.price, result.currency)), '\n',
+    emoji('bullet'), ' Новый баланс: ', bold(money(result.balance)), '\n',
+    emoji('bullet'), ` Номер покупки: ${result.purchaseId}\n\n`,
+    emoji('link'), ' ', bold('Ваша ссылка для входа:'), '\n', result.inviteLink, '\n\n',
+    emoji('warning'), ` ${ONE_TIME_LINK_WARNING}`],
     rows: [[urlButton('Перейти в канал', result.inviteLink, { icon: 'link' })],
-      [button('Мои покупки', 'my_purchases', { icon: 'cart' })], ...back('products')],
+    [button('Мои покупки', 'my_purchases', { icon: 'cart' })], ...back('products')],
   };
 }
 export function purchaseFailedText() {
@@ -278,13 +283,15 @@ export function productScreen(product) {
   return {
     parts: product
       ? [emoji('cart'), ' ', bold(product.title), '\n\n',
-        ...(product.description ? [emoji('bullet'), ` ${product.description}\n\n`] : []),
-        emoji('bullet'), ' Цена: ', ...productPriceParts(product)]
+      ...(product.description ? [emoji('bullet'), ` ${product.description}\n\n`] : []),
+      emoji('bullet'), ' Цена: ', ...productPriceParts(product)]
       : [emoji('warning'), ' Товар больше не доступен.'],
     rows: back('products'),
   };
 }
 export function errorScreen() {
-  return { parts: [emoji('warning'), ' Не получилось выполнить действие. Попробуйте ещё раз или отправьте /start.'],
-    rows: back('main_menu') };
+  return {
+    parts: [emoji('warning'), ' Не получилось выполнить действие. Попробуйте ещё раз или отправьте /start.'],
+    rows: back('main_menu')
+  };
 }
