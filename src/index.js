@@ -5,6 +5,7 @@ import { createStore } from './store.js';
 import { registerHandlers } from './bot/handlers.js';
 import { createTransport } from './bot/transport.js';
 import { registerAdminHandlers } from './bot/admin.js';
+import { createBroadcastQueue } from './bot/broadcast-queue.js';
 import { registerPaymentHandlers } from './bot/payments.js';
 import { CHANNEL_ENV } from './config.js';
 async function main() {
@@ -19,9 +20,12 @@ async function main() {
   if (!config.moneyAcceptCard) console.warn('Не указан MONEY_ACCEPT_CARD: оплата картой будет недоступна.');
   registerHandlers(bot, { store, rulesVersion: config.rulesVersion, transport, channels: config.channels, hooks });
   // Платежи регистрируются до админки: её обработчик text и catch-all callback идут последними.
-  registerPaymentHandlers(bot, { store, transport, rulesVersion: config.rulesVersion,
-    moneyAcceptCard: config.moneyAcceptCard, hooks });
-  registerAdminHandlers(bot, { store, transport });
+  registerPaymentHandlers(bot, {
+    store, transport, rulesVersion: config.rulesVersion,
+    moneyAcceptCard: config.moneyAcceptCard, hooks
+  });
+  const broadcastQueue = createBroadcastQueue({ store, telegram: bot.telegram, transport });
+  registerAdminHandlers(bot, { store, transport, broadcastQueue });
   let shuttingDown = false;
   let stopRetry;
   const tryStop = signal => {
@@ -34,6 +38,7 @@ async function main() {
   };
   const stop = signal => {
     shuttingDown = true;
+    broadcastQueue.requestStop();
     // В Telegraf 4.16.3 onLaunch вызывается ДО создания polling.
     // Сигнал во время getMe/deleteWebhook не должен потеряться.
     if (!tryStop(signal) && !stopRetry) {
@@ -49,6 +54,7 @@ async function main() {
     await bot.launch({}, () => {
       console.log('Night Kavkaz: подключение к Telegram установлено. Хранилище: SQLite.');
       if (shuttingDown) stop('shutdown');
+      else broadcastQueue.start();
     });
   } catch (error) {
     if (!shuttingDown) {
@@ -60,6 +66,7 @@ async function main() {
     clearInterval(stopRetry);
     process.removeListener('SIGINT', onSigint);
     process.removeListener('SIGTERM', onSigterm);
+    await broadcastQueue.stop();
     store.close();
   }
 }

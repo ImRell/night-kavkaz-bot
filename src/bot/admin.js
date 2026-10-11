@@ -1,12 +1,13 @@
 import { answerCallback } from './transport.js';
 import { randomBytes } from 'node:crypto';
+import { broadcastStatusScreen, broadcastJobsScreen } from '../ui/admin/broadcasts.js';
 import { discountBroadcastOfferScreen, discountNotificationScreen, discountBroadcastPreviewScreen } from '../ui/admin/discount-notifications.js';
 import { adminDiscountsScreen, adminDiscountScreen } from '../ui/admin/discounts.js';
 import { parseMoscowEnd } from '../discounts.js';
 import {
   adminMenuScreen, adminPromptScreen, adminAdminsScreen, adminCountScreen,
   adminLookupScreen, adminCreditResultScreen, adminBroadcastPreviewScreen,
-  adminBroadcastResultScreen, adminUsersScreen, adminActionResultScreen,
+  adminUsersScreen, adminActionResultScreen,
   adminBanResultScreen, adminReceiptsScreen, topUpAdminCaption, topUpAdminKeyboard,
 } from '../ui/admin/screens.js';
 import { bannedScreen } from '../ui/screens.js';
@@ -22,7 +23,7 @@ const validUserQuery = value => validId(value) || /^@?[A-Za-z0-9_]{1,32}$/.test(
 const USER_TOOL_INPUTS = new Set(['lookup', 'credit', 'ban', 'unban']);
 const USERS_CANCEL = 'admin_users_cancel';
 
-export function registerAdminHandlers(bot, { store, transport, clock = Date.now, logger = console }) {
+export function registerAdminHandlers(bot, { store, transport, broadcastQueue, clock = Date.now, logger = console }) {
   const inputs = new Map();
   const drafts = new Map();
   const discountOffers = new Map();
@@ -370,47 +371,48 @@ export function registerAdminHandlers(bot, { store, transport, clock = Date.now,
         return;
       }
     }
-    drafts.delete(actor); // Повторное нажатие не начнёт вторую рассылку.
-    // Для уведомлений повторно исключаем заблокированных и новых админов перед отправкой.
-    const allowed = draft.discountNotice ? new Set(store.listOrdinaryUserIds()) : null;
-    const recipients = allowed ? draft.recipients.filter(id => allowed.has(id)) : draft.recipients;
-    await answerCallback(ctx, 'Рассылка началась.');
-    await transport.show(ctx, adminPromptScreen('Рассылка выполняется', `Отправляю сообщения ${recipients.length} зарегистрированным пользователям.`));
-    let sent = 0;
-    let failed = 0;
-    for (const telegramId of recipients) {
-      try {
-        if (draft.discountNotice && (!validDiscountNotice(draft.discountNotice) ||
-          store.isBanned(telegramId) || store.isAdmin(telegramId))) {
-          failed++;
-          continue;
-        }
-        if (draft.discountNotice) {
-          // Общий транспорт добавляет кастомные эмодзи и умеет повторить отправку без них,
-          // только если Telegram явно отказал в их использовании.
-          await transport.send(ctx.telegram, telegramId, draft.notification);
-        } else {
-          await ctx.telegram.sendMessage(telegramId, draft.text);
-        }
-        sent++;
-      } catch {
-        failed++;
+    const allowed = new Set(store.listOrdinaryUserIds());
+    const recipients = draft.recipients.filter(id => allowed.has(id));
+    const payload = { text: draft.text };
+    if (draft.discountNotice) {
+      payload.notification = draft.notification;
+      payload.discountNotice = draft.discountNotice;
+      if (draft.discountNotice.productId !== null) {
+        const product = store.getProduct(draft.discountNotice.productId);
+        payload.expectedPrice = product.price;
+        payload.expectedBasePrice = product.basePrice;
       }
-      // Telegram ограничивает частоту исходящих сообщений; отправляем не быстрее 25/с.
-      await sleep(40);
     }
-    const actorInfo = store.findRegisteredUser(actor);
-    const actorName = [actorInfo?.firstName, actorInfo?.lastName].filter(Boolean).join(' ');
-    const actorLabel = `Админ ${actor}${actorInfo?.username ? ` (@${actorInfo.username})` : ''}${actorName ? `, ${actorName}` : ''}`;
-    const adminNotice = `${actorLabel} использовал рассылку с сообщением:\n\n${draft.text}`;
-    for (const target of store.listAdmins()) {
-      if (String(target.telegramId) === actor) continue;
-      try { await ctx.telegram.sendMessage(target.telegramId, adminNotice); }
-      catch { /* Admin notification failure must not change broadcast result. */ }
-      await sleep(40);
-    }
-    await transport.show(ctx, adminBroadcastResultScreen({ sent, failed, total: recipients.length }));
+    // Только постановка в очередь, без ожидания сетевых отправок внутри callback.
+    const job = broadcastQueue.enqueue(actor, payload, recipients);
+    drafts.delete(actor);
+    await answerCallback(ctx, 'Рассылка поставлена в фоновую очередь.');
+    await transport.show(ctx, broadcastStatusScreen(job));
   }
+  async function showBroadcastJobs(ctx, page = 0) {
+    if (!admin(ctx)) return deny(ctx);
+    inputs.delete(String(ctx.from.id));
+    await answerCallback(ctx);
+    await transport.show(ctx, broadcastJobsScreen(store.listBroadcasts(ctx.from.id, page)));
+  }
+  bot.action('admin_broadcast_jobs', ctx => showBroadcastJobs(ctx));
+  bot.action(/^admin_broadcast_jobs:(\d{1,6})$/, ctx => showBroadcastJobs(ctx, Number(ctx.match[1])));
+  bot.action(/^admin_broadcast_status:([1-9]\d{0,14})$/, async ctx => {
+    if (!admin(ctx)) return deny(ctx);
+    const job = store.getBroadcast(Number(ctx.match[1]));
+    if (!job || job.actorId !== String(ctx.from.id)) return answerCallback(ctx, 'Рассылка не найдена или принадлежит другому администратору.', { show_alert: true });
+    await answerCallback(ctx);
+    await transport.show(ctx, broadcastStatusScreen(job));
+  });
+  bot.action(/^admin_broadcast_stop:([1-9]\d{0,14})$/, async ctx => {
+    if (!admin(ctx)) return deny(ctx);
+    const id = Number(ctx.match[1]);
+    const job = store.getBroadcast(id);
+    if (!job || job.actorId !== String(ctx.from.id)) return answerCallback(ctx, 'Рассылка не найдена или принадлежит другому администратору.', { show_alert: true });
+    const cancelled = store.cancelBroadcast(id, ctx.from.id);
+    await answerCallback(ctx, cancelled ? 'Отправка оставшихся сообщений остановлена.' : 'Рассылка уже закончена.');
+    await transport.show(ctx, broadcastStatusScreen(store.getBroadcast(id)));
+  });
 
   bot.on('text', async ctx => {
     if (!admin(ctx)) return;

@@ -2,6 +2,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdir, chmod } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { discountedPrice } from './discounts.js';
+import { createBroadcastRepository } from './database/broadcasts.js';
 import { migrateSchema, importLegacyUsers, seedInitialCatalog } from './database/migrations.js';
 function telegramId(id) {
   const value = String(id);
@@ -232,6 +233,7 @@ export async function createStore(file, { legacyPath, bootstrapAdminIds = [], cl
     }
     let closed = false;
     return {
+      ...createBroadcastRepository(db, clock),
       // Кешируется SQL, не результаты: каждый вызов читает текущую базу.
       get(id) { return getUser.get(telegramId(id)); },
       isAdmin(id) { return Boolean(isAdminQuery.get(telegramId(id))); },

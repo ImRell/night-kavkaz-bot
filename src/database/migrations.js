@@ -141,6 +141,34 @@ const migrations = [{
   version: 12, sql: `
   -- Удаляем рекламную цену-заглушку. Базовая price и настройки скидок не меняются.
   ALTER TABLE products DROP COLUMN original_price;
+` }, {
+  version: 13, sql: `
+  CREATE TABLE broadcast_jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    actor_id TEXT NOT NULL,
+    payload TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'running', 'completed', 'cancelled')),
+    created_at TEXT NOT NULL,
+    finished_at TEXT,
+    reason TEXT,
+    report_sent INTEGER NOT NULL DEFAULT 0 CHECK (report_sent IN (0, 1)),
+    report_attempts INTEGER NOT NULL DEFAULT 0,
+    report_next_at INTEGER NOT NULL DEFAULT 0,
+    admin_notice_sent INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX broadcast_jobs_status ON broadcast_jobs(status, id);
+  CREATE INDEX broadcast_jobs_actor ON broadcast_jobs(actor_id, id);
+  CREATE TABLE broadcast_recipients (
+    job_id INTEGER NOT NULL REFERENCES broadcast_jobs(id) ON DELETE CASCADE,
+    telegram_id TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'sending', 'sent', 'failed', 'skipped', 'uncertain')),
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_at INTEGER NOT NULL DEFAULT 0,
+    error_code TEXT,
+    PRIMARY KEY (job_id, telegram_id)
+  );
+  CREATE INDEX broadcast_recipients_pending ON broadcast_recipients(job_id, status, next_at);
+  CREATE TABLE broadcast_meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
 ` }];
 export function migrateSchema(db) {
   db.exec('BEGIN IMMEDIATE');
