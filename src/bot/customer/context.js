@@ -32,8 +32,9 @@ export function createContext({
   async function requireAgreement(ctx, replyBelow = false) {
     const record = store.get(ctx.from.id);
     if (hasAgreement(record)) return record;
-    await answerCallback(ctx, 'Сначала подтвердите возраст и согласие с правилами.');
-    if (replyBelow) await transport.reply(ctx, welcomeScreen());
+    if (ctx.callbackQuery)
+      await answerCallback(ctx, 'Сначала подтвердите возраст и согласие с правилами.');
+    if (replyBelow || !ctx.callbackQuery) await transport.reply(ctx, welcomeScreen());
     else await transport.show(ctx, welcomeScreen());
     return null;
   }

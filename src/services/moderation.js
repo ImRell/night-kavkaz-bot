@@ -2,15 +2,12 @@ import { telegramId } from '../domain/telegram-id.js';
 export function createModerationService(context) {
   const { db } = context;
   const {
-    getTopUpQuery,
-    reviewTopUpQuery,
     isAdminQuery,
     userLookupQuery,
     userByUsernameQuery,
     isBannedQuery,
     banUserQuery,
     unbanUserQuery,
-    pendingCardTopUpIdsOfUser,
   } = context.queries;
   return {
     isBanned(id) {
@@ -50,14 +47,11 @@ export function createModerationService(context) {
           return { status: 'already_banned', telegramId: target, user: registered };
         }
         banUserQuery.run(actor, target);
-        const rejectedIds = pendingCardTopUpIdsOfUser.all(target).map((row) => row.id);
-        for (const topUpId of rejectedIds) reviewTopUpQuery.run('rejected', actor, topUpId);
         db.exec('COMMIT');
         return {
           status: 'banned',
           telegramId: target,
           user: registered,
-          rejectedTopUps: rejectedIds.map((topUpId) => getTopUpQuery.get(topUpId)),
         };
       } catch (error) {
         db.exec('ROLLBACK');

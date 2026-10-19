@@ -12,7 +12,7 @@ const FIELD_LABELS = Object.freeze({
   telegramId: 'user',
   adminId: 'admin',
   actorId: 'admin',
-  topUpId: 'чек',
+  topUpId: 'пополнение',
   purchaseId: 'покупка',
   productId: 'товар',
   jobId: 'рассылка',

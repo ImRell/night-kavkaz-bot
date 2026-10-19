@@ -1,7 +1,7 @@
 import { button, bold, emoji } from '../emoji.js';
 const backRow = () => [[button('Назад', 'admin_menu', { icon: 'back' })]];
 const usersBackRow = () => [[button('Назад', 'admin_users', { icon: 'back' })]];
-export function adminMenuScreen(maintenanceMode = false, pendingReceipts = 0) {
+export function adminMenuScreen(maintenanceMode = false) {
   return {
     parts: [
       emoji('lock'),
@@ -14,12 +14,7 @@ export function adminMenuScreen(maintenanceMode = false, pendingReceipts = 0) {
         : [emoji('check'), ' Бот работает в обычном режиме.']),
     ],
     rows: [
-      [
-        button('Рассылки', 'admin_broadcasts', { icon: 'ellipsis' }),
-        button(pendingReceipts > 0 ? `Чеки (${pendingReceipts})` : 'Чеки', 'admin_receipts', {
-          icon: 'card',
-        }),
-      ],
+      [button('Рассылки', 'admin_broadcasts', { icon: 'ellipsis' })],
       [
         button('Администраторы', 'admin_list', { icon: 'lock' }),
         button('Пользователи', 'admin_users', { icon: 'eyes' }),
@@ -279,7 +274,6 @@ export function adminBanResultScreen(result, query) {
   const target = result.telegramId ?? query;
   const label = userLabel(target, result.user);
   if (result.status === 'banned') {
-    const rejected = result.rejectedTopUps?.length ?? 0;
     return {
       parts: [
         emoji('lock'),
@@ -290,7 +284,6 @@ export function adminBanResultScreen(result, query) {
         ` Пользователь: ${label}\n`,
         emoji('bullet'),
         ' Доступ к боту закрыт, рассылки ему не приходят.',
-        ...(rejected ? ['\n', emoji('bullet'), ` Отклонено чеков на проверке: ${rejected}`] : []),
       ],
       rows: usersBackRow(),
     };
@@ -322,62 +315,6 @@ export function adminBanResultScreen(result, query) {
     parts: [emoji('warning'), ' ', messages[result.status] ?? 'Не удалось выполнить операцию.'],
     rows: usersBackRow(),
   };
-}
-export function adminReceiptsScreen(
-  { items, page, pageSize, total, hasPrev, hasNext },
-  notice = '',
-) {
-  const pageCount = Math.max(1, Math.ceil(total / pageSize));
-  const parts = [
-    emoji('card'),
-    ' ',
-    bold('Непроверенные чеки'),
-    '\n',
-    emoji('bullet'),
-    ` Всего: ${total}\n`,
-    emoji('bullet'),
-    ` Страница ${page + 1} из ${pageCount}\n\n`,
-  ];
-  if (notice) parts.push(emoji('check'), ' ', notice, '\n\n');
-  if (!items.length) parts.push(emoji('check'), ' Все чеки проверены. Новых заявок нет.');
-  else {
-    items.forEach((item, index) => {
-      parts.push(
-        emoji('star'),
-        ' ',
-        bold(`Заявка №${item.id}`),
-        '\n',
-        emoji('diamond'),
-        ` Сумма: ${adminMoney(item.amount)}\n`,
-        emoji('question'),
-        ` Пользователь: ${userLabel(item.telegramId, item)}\n`,
-        emoji('hourglass'),
-        ` Создана: ${displayDate(item.createdAt)}\n`,
-      );
-      if (index < items.length - 1) parts.push('\n────────────\n\n');
-    });
-    parts.push(
-      '\n',
-      emoji('bullet'),
-      ' Нажмите на заявку, чтобы открыть чек с кнопками «Зачислить» и «Отклонить».',
-    );
-  }
-  const rows = items.map((item) => [
-    button(
-      `Открыть чек №${item.id} · ${adminMoney(item.amount)}`,
-      `admin_receipt:${item.id}:${page}`,
-      { icon: 'eyes' },
-    ),
-  ]);
-  const navigation = [];
-  if (hasPrev) navigation.push(button('← Назад', `admin_receipts:${page - 1}`, { icon: 'back' }));
-  if (hasNext) navigation.push(button('Далее →', `admin_receipts:${page + 1}`));
-  if (navigation.length) rows.push(navigation);
-  rows.push(
-    [button('Обновить', `admin_receipts_refresh:${page}`, { icon: 'lightning' })],
-    ...backRow(),
-  );
-  return { parts, rows };
 }
 export function adminBroadcastPreviewScreen(message, recipientCount) {
   return {
@@ -419,28 +356,3 @@ const userLabel = (id, user) => {
   const name = [user?.firstName, user?.lastName].filter(Boolean).join(' ');
   return `${id}${user?.username ? ` (@${user.username})` : ''}${name ? `, ${name}` : ''}`;
 };
-export function topUpAdminCaption(topUp, user, reviewer) {
-  const lines = [
-    `💳 Заявка на пополнение №${topUp.id}`,
-    `Сумма: ${adminMoney(topUp.amount)}`,
-    `Пользователь: ${userLabel(topUp.telegramId, user)}`,
-    `Создана: ${displayDate(topUp.createdAt)}`,
-  ];
-  if (user?.bannedAt) lines.push('🔒 Пользователь заблокирован');
-  if (topUp.status === 'approved')
-    lines.push('', `✅ Зачислено. Админ: ${userLabel(topUp.reviewedBy, reviewer)}`);
-  else if (topUp.status === 'rejected')
-    lines.push('', `❌ Отклонено. Админ: ${userLabel(topUp.reviewedBy, reviewer)}`);
-  else lines.push('', 'Проверьте поступление денег и примите решение.');
-  return lines.join('\n').slice(0, 1024);
-}
-export function topUpAdminKeyboard(topUpId) {
-  return {
-    inline_keyboard: [
-      [
-        { text: 'Зачислить', callback_data: `topup_approve:${topUpId}`, style: 'success' },
-        { text: 'Отклонить', callback_data: `topup_reject:${topUpId}`, style: 'danger' },
-      ],
-    ],
-  };
-}

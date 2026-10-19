@@ -18,7 +18,6 @@ export const EMOJI = Object.freeze({
   bullet: Object.freeze({ id: '5294096239464295059', fallback: '🔹' }),
   back: Object.freeze({ id: '5348276504579031076', fallback: '↩️' }),
   cancel: Object.freeze({ id: '5348402067947929537', fallback: '❌' }),
-  card: Object.freeze({ id: '5283232570660634549', fallback: '💳' }),
   link: Object.freeze({ id: '5454419255430767770', fallback: '🔗' }),
 });
 const BUTTON_STYLES = new Set(['success', 'danger', 'primary']);

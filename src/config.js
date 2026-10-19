@@ -19,14 +19,6 @@ function readChannels(env) {
   }
   return Object.freeze(channels);
 }
-function readCard(env) {
-  const raw = env.MONEY_ACCEPT_CARD?.trim();
-  if (!raw) return null;
-  const digits = raw.replace(/[\s-]/g, '');
-  if (!/^\d{11,20}$/.test(digits))
-    throw new Error('MONEY_ACCEPT_CARD должен содержать только номер карты или счёта (цифры).');
-  return digits;
-}
 export function readConfig(env = process.env) {
   const token = env.BOT_TOKEN?.trim();
   if (!token || token === 'your_telegram_bot_token_here')
@@ -44,6 +36,5 @@ export function readConfig(env = process.env) {
     rulesVersion: 1,
     bootstrapAdminIds: [...new Set(bootstrapAdminIds)],
     channels: readChannels(env),
-    moneyAcceptCard: readCard(env),
   };
 }

@@ -3,7 +3,6 @@ import { registerNavigationHandlers } from './admin/navigation.js';
 import { registerDiscountsHandlers } from './admin/discounts.js';
 import { registerBroadcastStartHandlers } from './admin/broadcast-start.js';
 import { registerUsersHandlers } from './admin/users.js';
-import { registerReceiptsHandlers } from './admin/receipts.js';
 import { registerBroadcastsHandlers } from './admin/broadcasts.js';
 import { registerInputHandlers } from './admin/input.js';
 import { registerFallbackHandlers } from './admin/fallback.js';
@@ -13,7 +12,6 @@ export function registerAdminHandlers(bot, options) {
   registerDiscountsHandlers(bot, context);
   registerBroadcastStartHandlers(bot, context);
   registerUsersHandlers(bot, context);
-  registerReceiptsHandlers(bot, context);
   registerBroadcastsHandlers(bot, context);
   registerInputHandlers(bot, context);
   registerFallbackHandlers(bot, context);

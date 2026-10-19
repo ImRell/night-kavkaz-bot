@@ -2,7 +2,6 @@ import { answerCallback } from '../transport.js';
 import { adminMenuScreen } from '../../ui/admin/screens.js';
 import { createPromptTools } from './prompts.js';
 import { createDirectoryTools } from './users.js';
-import { createReceiptTools } from './receipts.js';
 import { createDiscountTools } from './discounts.js';
 import { createBroadcastTools } from './broadcasts.js';
 const INPUT_TTL_MS = 10 * 60 * 1000;
@@ -28,10 +27,7 @@ export function createContext({
     await answerCallback(ctx, 'Доступ только для администраторов.', { show_alert: true });
   }
   async function showMenu(ctx) {
-    await transport.show(
-      ctx,
-      adminMenuScreen(store.isMaintenanceMode(), store.pendingReceiptCount()),
-    );
+    await transport.show(ctx, adminMenuScreen(store.isMaintenanceMode()));
   }
   const context = {
     store,
@@ -55,7 +51,6 @@ export function createContext({
   };
   Object.assign(context, createPromptTools(context));
   Object.assign(context, createDirectoryTools(context));
-  Object.assign(context, createReceiptTools(context));
   Object.assign(context, createDiscountTools(context));
   Object.assign(context, createBroadcastTools(context));
   return context;

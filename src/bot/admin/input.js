@@ -61,11 +61,7 @@ export function registerInputHandlers(bot, context) {
         );
       if (USER_TOOL_INPUTS.has(state.type))
         return await showInputResult(ctx, state, adminUsersScreen(store.listUsers(0, 5), false));
-      await showInputResult(
-        ctx,
-        state,
-        adminMenuScreen(store.isMaintenanceMode(), store.pendingReceiptCount()),
-      );
+      await showInputResult(ctx, state, adminMenuScreen(store.isMaintenanceMode()));
       return;
     }
     return inputHandlers[state.type]?.(ctx, context, { actor, state, text });

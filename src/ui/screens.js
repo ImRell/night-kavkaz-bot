@@ -1,5 +1,12 @@
-import { emoji, button, urlButton, bold, strikethrough, code } from './emoji.js';
-import { TOP_UP_AMOUNTS, RUB_PER_STAR, isTopUpAmount, starsForRub } from '../bot/top-up-options.js';
+import { emoji, button, urlButton, bold, strikethrough } from './emoji.js';
+import {
+  TOP_UP_AMOUNTS,
+  RUB_PER_STAR,
+  MIN_TOP_UP_AMOUNT,
+  MAX_TOP_UP_AMOUNT,
+  isTopUpAmount,
+  starsForRub,
+} from '../bot/top-up-options.js';
 const back = (target) => [[button('Назад', target, { icon: 'back' })]];
 export const money = (amount, currency = 'RUB') =>
   new Intl.NumberFormat('ru-RU', {
@@ -151,9 +158,15 @@ export function topUpScreen(record) {
       emoji('question'),
       ' На какую сумму пополнить баланс?\n\n',
       emoji('bullet'),
-      ' Оплата банковской картой или через Telegram Stars.',
+      ' Оплата только через Telegram Stars.',
     ],
-    rows: [amounts.slice(0, 2), amounts.slice(2, 4), amounts.slice(4), ...back('profile')],
+    rows: [
+      amounts.slice(0, 2),
+      amounts.slice(2, 4),
+      amounts.slice(4),
+      [button('Ввести свою сумму', 'top_up_custom', { icon: 'lightning' })],
+      ...back('profile'),
+    ],
   };
 }
 export function topUpMethodScreen(record, amount) {
@@ -172,155 +185,27 @@ export function topUpMethodScreen(record, amount) {
       emoji('diamond'),
       ` Текущий баланс: ${money(record.balance)}\n\n`,
       emoji('question'),
-      ' Выберите способ оплаты:',
+      ' Оплата только через Telegram Stars. Подтвердите сумму:',
     ],
     rows: [
-      [button('🇷🇺 Банковская карта', `top_up_card:${amount}`)],
       [button(`Telegram Stars (${stars} ⭐)`, `top_up_stars:${amount}`, { icon: 'star' })],
       ...back('top_up'),
     ],
   };
 }
-export function cardTopUpScreen(amount, card) {
-  if (!isTopUpAmount(amount)) throw new TypeError('Недоступная сумма пополнения.');
-  if (!card) {
-    return {
-      parts: [
-        emoji('warning'),
-        ' Оплата банковской картой временно недоступна. Выберите другой способ.',
-      ],
-      rows: back(`top_up_amount:${amount}`),
-    };
-  }
+export function customTopUpScreen(invalid = false) {
   return {
     parts: [
-      emoji('card'),
+      emoji('star'),
       ' ',
-      bold('Пополнение баланса'),
+      bold('Введите свою сумму'),
       '\n\n',
-      'Сумма перевода: ',
-      bold(`${amount}₽`),
-      '\n',
-      '🇷🇺 Номер карты: ',
-      code(card.replace(/(.{4})(?=.)/g, '$1 ')),
-      '\n\n',
-      'Переведите указанную сумму на эту карту. После перевода нажмите «Я оплатил» и пришлите чек ',
-      '(фото, скриншот или документ).\n\n',
-      'Баланс пополнится автоматически, если вы перевели деньги.',
+      ...(invalid ? ['Некорректная сумма. ', '\n\n'] : []),
+      `Отправьте целое число от ${MIN_TOP_UP_AMOUNT} до ${MAX_TOP_UP_AMOUNT} — сумму пополнения в рублях, без копеек и обозначения валюты.\n\n`,
+      `Оплата только через Telegram Stars: 1 ⭐ = ${String(RUB_PER_STAR).replace('.', ',')} ₽. Количество звёзд округляется вверх.\n\n`,
+      'Например: 500. Для отмены нажмите кнопку ниже или отправьте /cancel.',
     ],
-    rows: [
-      [button('Я оплатил', `top_up_paid:${amount}`, { icon: 'check' })],
-      ...back(`top_up_amount:${amount}`),
-    ],
-  };
-}
-export function receiptPromptScreen(amount) {
-  return {
-    parts: [
-      emoji('card'),
-      ' ',
-      bold('Отправьте чек'),
-      '\n\n',
-      emoji('bullet'),
-      ` Сумма: ${money(amount)}\n\n`,
-      'Пришлите чек одним сообщением: фото, скриншот или документ.\n\n',
-      emoji('warning'),
-      ' ',
-      bold('Внимание!'),
-      ' Отправляйте только чек нового перевода. ',
-      'Если вы повторно пришлёте чек, по которому баланс уже был начислен, ',
-      bold('ваш аккаунт будет заблокирован.'),
-    ],
-    rows: [[button('Отмена', 'top_up_receipt_cancel', { icon: 'cancel' })]],
-  };
-}
-export function receiptReminderScreen() {
-  return {
-    parts: [
-      emoji('warning'),
-      ' Нужен чек: пришлите фото, скриншот или документ. Чтобы отменить, нажмите «Отмена».',
-    ],
-    rows: [[button('Отмена', 'top_up_receipt_cancel', { icon: 'cancel' })]],
-  };
-}
-export function receiptExpiredScreen() {
-  return {
-    parts: [emoji('hourglass'), ' Время ожидания чека истекло. Начните пополнение заново.'],
-    rows: back('top_up'),
-  };
-}
-export function receiptSentScreen(topUp) {
-  return {
-    parts: [
-      emoji('hourglass'),
-      ' ',
-      bold('Чек отправлен на проверку'),
-      '\n\n',
-      emoji('bullet'),
-      ` Заявка №${topUp.id}\n`,
-      emoji('bullet'),
-      ` Сумма: ${money(topUp.amount)}\n\n`,
-      'Баланс пополнится после проверки оплаты администратором. Мы пришлём уведомление.',
-    ],
-    rows: back('profile'),
-  };
-}
-export function receiptTooManyScreen(topUp) {
-  return {
-    parts: [
-      emoji('hourglass'),
-      ' ',
-      bold('Дождитесь проверки первого чека'),
-      '\n\n',
-      ...(topUp
-        ? [
-            emoji('bullet'),
-            ` Заявка №${topUp.id}\n`,
-            emoji('bullet'),
-            ` Сумма: ${money(topUp.amount)}\n\n`,
-          ]
-        : []),
-      'Ваш чек уже на проверке у администратора. Новый чек можно будет отправить после решения по текущей заявке. ',
-      'Мы пришлём уведомление.',
-    ],
-    rows: back('profile'),
-  };
-}
-export function topUpApprovedScreen(topUp, balance) {
-  return {
-    parts: [
-      emoji('check'),
-      ' ',
-      bold('Оплата подтверждена!'),
-      '\n\n',
-      emoji('bullet'),
-      ` Заявка №${topUp.id}\n`,
-      emoji('bullet'),
-      ' Зачислено: ',
-      bold(money(topUp.amount)),
-      '\n',
-      emoji('diamond'),
-      ' Текущий баланс: ',
-      bold(money(balance)),
-    ],
-    rows: [
-      [button('Товары', 'products', { icon: 'cart' })],
-      [button('Профиль', 'profile', { icon: 'profile' })],
-    ],
-  };
-}
-export function topUpRejectedScreen(topUp) {
-  return {
-    parts: [
-      emoji('warning'),
-      ' ',
-      bold('Оплата не подтверждена'),
-      '\n\n',
-      emoji('bullet'),
-      ` Заявка №${topUp.id} на ${money(topUp.amount)} отклонена.\n\n`,
-      'Если вы уверены, что перевели деньги, свяжитесь с администратором.',
-    ],
-    rows: back('profile'),
+    rows: [[button('Отмена', 'top_up', { icon: 'cancel' })]],
   };
 }
 export function starsInvoiceSentScreen(amount) {

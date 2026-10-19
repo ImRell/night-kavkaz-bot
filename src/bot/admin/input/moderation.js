@@ -1,8 +1,4 @@
-import {
-  adminPromptScreen,
-  adminBanResultScreen,
-  topUpAdminCaption,
-} from '../../../ui/admin/screens.js';
+import { adminPromptScreen, adminBanResultScreen } from '../../../ui/admin/screens.js';
 import { bannedScreen } from '../../../ui/screens.js';
 export async function handleModerationInput(ctx, context, { actor, state, text }) {
   const {
@@ -40,18 +36,6 @@ export async function handleModerationInput(ctx, context, { actor, state, text }
       userId: result.telegramId,
     });
     if (banning) {
-      const banned = store.findRegisteredUser(result.telegramId);
-      const reviewer = store.findRegisteredUser(actor);
-      for (const topUp of result.rejectedTopUps ?? []) {
-        const caption = topUpAdminCaption(topUp, banned, reviewer);
-        for (const { chatId, messageId } of store.listTopUpAdminMessages(topUp.id)) {
-          try {
-            await ctx.telegram.editMessageCaption(chatId, messageId, undefined, caption, {
-              reply_markup: { inline_keyboard: [] },
-            });
-          } catch {}
-        }
-      }
       try {
         await transport.send(ctx.telegram, result.telegramId, bannedScreen());
       } catch {}

@@ -10,11 +10,11 @@ import { registerErrorsHandlers } from './customer/errors.js';
 export function registerHandlers(bot, options) {
   const context = createContext(options);
   registerAccessHandlers(bot, context);
+  registerTopUpHandlers(bot, context);
   registerNavigationHandlers(bot, context);
   registerCatalogHandlers(bot, context);
   registerPurchaseHandlers(bot, context);
   registerProfileHandlers(bot, context);
-  registerTopUpHandlers(bot, context);
   registerHistoryHandlers(bot, context);
   registerErrorsHandlers(bot, context);
 }

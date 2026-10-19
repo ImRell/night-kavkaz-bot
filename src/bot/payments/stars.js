@@ -7,10 +7,10 @@ export function registerStarsHandlers(bot, context) {
   bot.action(/^top_up_stars:(\d{1,9})$/, async (ctx) => {
     if (!(await requireAgreement(ctx))) return;
     const amount = amountFrom(ctx);
-    if (!amount) return answerCallback(ctx, 'Эта сумма недоступна. Выберите сумму из списка.');
+    if (!amount)
+      return answerCallback(ctx, 'Эта сумма недоступна. Выберите сумму или введите свою.');
     const stars = starsForRub(amount);
     await answerCallback(ctx);
-    await transport.show(ctx, starsInvoiceSentScreen(amount));
     await ctx.telegram.sendInvoice(ctx.chat.id, {
       title: 'Пополнение баланса',
       description: `Пополнение баланса Night Kavkaz на ${amount} ₽`,
@@ -19,6 +19,7 @@ export function registerStarsHandlers(bot, context) {
       currency: 'XTR',
       prices: [{ label: `Пополнение на ${amount} ₽`, amount: stars }],
     });
+    await transport.show(ctx, starsInvoiceSentScreen(amount));
   });
   bot.on('pre_checkout_query', async (ctx) => {
     const query = ctx.preCheckoutQuery;
@@ -40,7 +41,12 @@ export function registerStarsHandlers(bot, context) {
     const payment = ctx.message.successful_payment;
     if (payment.currency !== 'XTR') return;
     const parsed = parseStarsPayload(payment.invoice_payload);
-    if (!parsed || parsed.userId !== String(ctx.from.id)) {
+    if (
+      !parsed ||
+      parsed.userId !== String(ctx.from.id) ||
+      payment.total_amount !== starsForRub(parsed.amount) ||
+      !payment.telegram_payment_charge_id
+    ) {
       logger.error('Оплата Stars с некорректным payload.', {
         userId: ctx.from.id,
       });

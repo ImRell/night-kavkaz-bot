@@ -14,8 +14,6 @@ export function createApplication(config, store, { logger = createLogger() } = {
     if (!config.channels[slug])
       logger.warn(`Не указан ${name}: покупка этого товара будет недоступна.`);
   }
-  if (!config.moneyAcceptCard)
-    logger.warn('Не указан MONEY_ACCEPT_CARD: оплата картой будет недоступна.');
   registerHandlers(bot, {
     store,
     rulesVersion: config.rulesVersion,
@@ -28,7 +26,6 @@ export function createApplication(config, store, { logger = createLogger() } = {
     store,
     transport,
     rulesVersion: config.rulesVersion,
-    moneyAcceptCard: config.moneyAcceptCard,
     hooks,
     logger,
   });
