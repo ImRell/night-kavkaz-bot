@@ -1,5 +1,5 @@
 import { emoji, button, urlButton, bold, strikethrough } from './emoji.js';
-import { RUB_PER_STAR, isStarsAmount, starsForRub } from '../domain/stars.js';
+import { isStarsAmount, starsForRub } from '../domain/stars.js';
 const back = (target) => [[button('Назад', target, { icon: 'back' })]];
 export const money = (amount, currency = 'RUB') =>
   new Intl.NumberFormat('ru-RU', {
@@ -97,7 +97,6 @@ export function menuScreen(user = {}, isAdmin = false) {
     ],
   };
 }
-const starsRate = () => String(RUB_PER_STAR).replace('.', ',');
 export function productBuyScreen(product) {
   if (!product) return productScreen(undefined);
   return {
@@ -121,20 +120,20 @@ export function paymentMethodScreen(product, { freeKassa = false } = {}) {
   if (!product) return productScreen(undefined);
   const starsAvailable = isStarsAmount(product.price);
   const rows = [];
-  if (starsAvailable)
-    rows.push([
-      button(
-        `Telegram Stars (${starsForRub(product.price)} ⭐)`,
-        `buy_stars:${product.id}:${product.price}`,
-        { icon: 'star' },
-      ),
-    ]);
   if (freeKassa)
     rows.push([
       button(
         `Карта / СБП (${money(product.price, product.currency)})`,
         `buy_fk:${product.id}:${product.price}`,
         { icon: 'diamond' },
+      ),
+    ]);
+  if (starsAvailable)
+    rows.push([
+      button(
+        `Telegram Stars (${starsForRub(product.price)} ⭐)`,
+        `buy_stars:${product.id}:${product.price}`,
+        { icon: 'star' },
       ),
     ]);
   return {
@@ -144,16 +143,9 @@ export function paymentMethodScreen(product, { freeKassa = false } = {}) {
       bold(product.title),
       '\n\n',
       emoji('bullet'),
-      ' К оплате: ',
+      ' Цена: ',
       ...productPriceParts(product),
-      '\n',
-      ...(starsAvailable
-        ? [
-            emoji('star'),
-            ` В Telegram Stars: ${starsForRub(product.price)} ⭐ (1 ⭐ = ${starsRate()} ₽)\n`,
-          ]
-        : []),
-      '\n',
+      '\n\n',
       emoji('question'),
       rows.length
         ? ' Выберите способ оплаты:'
