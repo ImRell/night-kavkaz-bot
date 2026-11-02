@@ -207,12 +207,6 @@ export function adminAdminsScreen(data, canManage = false, notice = '') {
   );
   return { parts, rows };
 }
-export function adminCountScreen(count) {
-  return {
-    parts: [emoji('profile'), ' ', bold('Зарегистрировано пользователей: '), bold(String(count))],
-    rows: backRow(),
-  };
-}
 export function adminLookupScreen(user, query) {
   const parts = [emoji('question'), ' ', bold(`Проверка пользователя: ${query}`), '\n\n'];
   if (!user) parts.push('Такой пользователь не зарегистрирован в базе данных.');
@@ -418,23 +412,6 @@ export function adminBroadcastPreviewScreen(message, recipientCount) {
         button('Отмена', 'admin_broadcast_cancel', { icon: 'cancel' }),
       ],
     ],
-  };
-}
-export function adminBroadcastResultScreen({ sent, failed, total }) {
-  return {
-    parts: [
-      emoji('check'),
-      ' ',
-      bold('Рассылка завершена.'),
-      '\n\n',
-      emoji('bullet'),
-      ` Всего получателей: ${total}\n`,
-      emoji('bullet'),
-      ` Доставлено: ${sent}\n`,
-      emoji('bullet'),
-      ` Не доставлено: ${failed}`,
-    ],
-    rows: backRow(),
   };
 }
 const userLabel = (id, user) => {

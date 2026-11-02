@@ -1,13 +1,6 @@
 import { welcomeScreen } from '../../ui/screens.js';
 import { answerCallback } from '../transport.js';
-export function createContext({
-  store,
-  transport,
-  rulesVersion,
-  channels = {},
-  hooks = {},
-  logger = console,
-}) {
+export function createContext({ store, transport, rulesVersion, channels = {}, logger = console }) {
   const opensCatalogBelow = (ctx) => {
     if (ctx.callbackQuery?.data === 'discount_products') return true;
     const message = ctx.callbackQuery?.message;
@@ -43,7 +36,6 @@ export function createContext({
     transport,
     rulesVersion,
     channels,
-    hooks,
     logger,
     opensCatalogBelow,
     hasAgreement,

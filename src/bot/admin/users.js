@@ -190,7 +190,7 @@ export function registerUsersHandlers(bot, context) {
       .then((result) => result && transport.show(ctx, adminCleanupResultScreen(result)))
       .catch(logFailure);
   });
-  bot.action(['admin_grant', 'admin_credit'], async (ctx) => {
+  bot.action('admin_grant', async (ctx) => {
     if (!admin(ctx)) return deny(ctx);
     await startInput(
       ctx,

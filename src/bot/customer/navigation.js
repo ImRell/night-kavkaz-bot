@@ -1,9 +1,8 @@
 import { welcomeScreen, menuScreen, legacySectionText } from '../../ui/screens.js';
 import { answerCallback } from '../transport.js';
 export function registerNavigationHandlers(bot, context) {
-  const { store, transport, rulesVersion, logger, hooks, hasAgreement, requireAgreement } = context;
+  const { store, transport, rulesVersion, logger, hasAgreement, requireAgreement } = context;
   bot.start((ctx) => {
-    hooks.onStart?.(ctx);
     return transport.reply(
       ctx,
       hasAgreement(store.get(ctx.from.id))
@@ -25,7 +24,7 @@ export function registerNavigationHandlers(bot, context) {
     await transport.show(ctx, menuScreen(ctx.from, store.isAdmin(ctx.from.id)));
   });
   // Buttons from old messages: profile, balance top-ups and balance purchases no longer exist.
-  bot.action(/^(?:profile$|top_up|topup_|confirm_purchase:|admin_receipt)/, async (ctx) => {
+  bot.action(/^(?:profile$|top_up|confirm_purchase:)/, async (ctx) => {
     if (!(await requireAgreement(ctx))) return;
     await answerCallback(ctx, legacySectionText(), { show_alert: true });
     await transport.show(ctx, menuScreen(ctx.from, store.isAdmin(ctx.from.id)));

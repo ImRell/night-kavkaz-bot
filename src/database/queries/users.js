@@ -31,9 +31,6 @@ export function prepareUsersQueries(db) {
       (SELECT count(*) FROM purchases WHERE purchases.telegram_id = users.telegram_id AND purchases.status = 'completed') AS purchaseCount,
       users.banned_at AS bannedAt
       FROM users WHERE username = ? COLLATE NOCASE LIMIT 1`);
-  const allUserIdsQuery = db.prepare(
-    'SELECT telegram_id AS telegramId FROM users ORDER BY telegram_id',
-  );
   const ordinaryUserIdsQuery = db.prepare(`SELECT users.telegram_id AS telegramId FROM users
       WHERE NOT EXISTS (SELECT 1 FROM admins WHERE admins.telegram_id = users.telegram_id)
         AND users.banned_at IS NULL
@@ -92,7 +89,6 @@ export function prepareUsersQueries(db) {
     userCountQuery,
     userLookupQuery,
     userByUsernameQuery,
-    allUserIdsQuery,
     ordinaryUserIdsQuery,
     pageUsersQuery,
     buyersCountQuery,

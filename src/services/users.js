@@ -13,7 +13,6 @@ export function createUsersService(context) {
     userCountQuery,
     userLookupQuery,
     userByUsernameQuery,
-    allUserIdsQuery,
     ordinaryUserIdsQuery,
     pageUsersQuery,
     buyersCountQuery,
@@ -51,18 +50,12 @@ export function createUsersService(context) {
     get(id) {
       return getUser.get(telegramId(id));
     },
-    registeredUserCount() {
-      return userCountQuery.get().count;
-    },
     findRegisteredUser(query) {
       const value = String(query ?? '').trim();
       if (/^[1-9]\d{0,19}$/.test(value)) return userLookupQuery.get(value);
       const username = value.replace(/^@/, '');
       if (!/^[A-Za-z0-9_]{1,32}$/.test(username)) return undefined;
       return userByUsernameQuery.get(username);
-    },
-    listRegisteredUserIds() {
-      return allUserIdsQuery.all().map((row) => row.telegramId);
     },
     listOrdinaryUserIds() {
       return ordinaryUserIdsQuery.all().map((row) => row.telegramId);

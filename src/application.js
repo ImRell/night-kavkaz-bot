@@ -19,7 +19,6 @@ import {
 export function createApplication(config, store, { logger = createLogger() } = {}) {
   const bot = new Telegraf(config.token);
   const transport = createTransport({ logger });
-  const hooks = {};
   for (const [slug, name] of Object.entries(CHANNEL_ENV)) {
     if (!config.channels[slug])
       logger.warn(`Не указан ${name}: покупка этого товара будет недоступна.`);
@@ -40,7 +39,6 @@ export function createApplication(config, store, { logger = createLogger() } = {
     rulesVersion: config.rulesVersion,
     transport,
     channels: config.channels,
-    hooks,
     logger,
   });
   const { handleFreeKassa, handleXRocket } = registerPaymentHandlers(bot, {
