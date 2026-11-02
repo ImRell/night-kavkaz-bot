@@ -18,14 +18,14 @@ export function prepareAdminsQueries(db) {
   const listAdminsQuery =
     db.prepare(`SELECT admins.telegram_id AS telegramId, admins.added_at AS addedAt,
       admins.added_by AS addedBy, users.username, users.first_name AS firstName, users.last_name AS lastName,
-      users.registered_at AS registeredAt, users.balance,
+      users.registered_at AS registeredAt,
       (SELECT count(*) FROM purchases WHERE purchases.telegram_id = admins.telegram_id AND purchases.status = 'completed') AS purchaseCount
       FROM admins LEFT JOIN users ON users.telegram_id = admins.telegram_id
       ORDER BY admins.added_at, admins.telegram_id`);
   const pageAdminsQuery =
     db.prepare(`SELECT admins.telegram_id AS telegramId, admins.added_at AS addedAt,
       admins.added_by AS addedBy, users.username, users.first_name AS firstName, users.last_name AS lastName,
-      users.registered_at AS registeredAt, users.balance,
+      users.registered_at AS registeredAt,
       (SELECT count(*) FROM purchases WHERE purchases.telegram_id = admins.telegram_id AND purchases.status = 'completed') AS purchaseCount
       FROM admins LEFT JOIN users ON users.telegram_id = admins.telegram_id
       ORDER BY admins.added_at, admins.telegram_id LIMIT ? OFFSET ?`);

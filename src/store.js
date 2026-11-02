@@ -7,11 +7,9 @@ import { createUsersService } from './services/users.js';
 import { createAdminsService } from './services/admins.js';
 import { createMaintenanceService } from './services/maintenance.js';
 import { createModerationService } from './services/moderation.js';
-import { createBalanceService } from './services/balance.js';
 import { createCatalogService } from './services/catalog.js';
 import { createPurchasesService } from './services/purchases.js';
-import { createTopUpsService } from './services/top-ups.js';
-import { createFreeKassaService } from './services/freekassa.js';
+import { createOrdersService } from './services/orders.js';
 export async function createStore(
   file,
   { legacyPath, bootstrapAdminIds = [], clock = Date.now } = {},
@@ -27,8 +25,6 @@ export async function createStore(
     for (const id of bootstrapAdminIds) seedAdmin.run(telegramId(id));
     const queries = prepareQueries(db);
     const context = { db, queries, clock, systemAdminIds, ...createPricing({ queries, clock }) };
-    const purchases = createPurchasesService(context);
-    for (const { id } of queries.allPendingPurchases.all()) purchases.revertPurchase(id);
     let closed = false;
     return {
       ...createBroadcastRepository(db, clock),
@@ -36,11 +32,9 @@ export async function createStore(
       ...createAdminsService(context),
       ...createMaintenanceService(context),
       ...createModerationService(context),
-      ...createBalanceService(context),
       ...createCatalogService(context),
-      ...createTopUpsService(context),
-      ...createFreeKassaService(context),
-      ...purchases,
+      ...createOrdersService(context),
+      ...createPurchasesService(context),
       close() {
         if (!closed) {
           db.close();

@@ -1,4 +1,4 @@
-import { productsScreen, purchaseConfirmScreen } from '../../ui/screens.js';
+import { productsScreen, productBuyScreen } from '../../ui/screens.js';
 import { answerCallback } from '../transport.js';
 export function registerCatalogHandlers(bot, context) {
   const {
@@ -30,7 +30,6 @@ export function registerCatalogHandlers(bot, context) {
       return;
     }
     await answerCallback(ctx);
-    const record = store.get(ctx.from.id);
-    await transport.show(ctx, purchaseConfirmScreen(product, record?.balance ?? 0));
+    await transport.show(ctx, productBuyScreen(product));
   });
 }

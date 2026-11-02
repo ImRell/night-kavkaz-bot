@@ -1,9 +1,9 @@
 export function prepareUsersQueries(db) {
-  const BUYER_CONDITION = `(users.balance > 0 OR EXISTS (
+  const BUYER_CONDITION = `EXISTS (
         SELECT 1 FROM purchases WHERE purchases.telegram_id = users.telegram_id AND purchases.status = 'completed'
-      ))`;
+      )`;
   const getUser = db.prepare(`SELECT telegram_id AS telegramId, accepted_at AS acceptedAt,
-      rules_version AS rulesVersion, balance,
+      rules_version AS rulesVersion,
       username, first_name AS firstName, last_name AS lastName, registered_at AS registeredAt,
       (SELECT count(*) FROM purchases WHERE purchases.telegram_id = users.telegram_id AND purchases.status = 'completed') AS purchaseCount,
       users.banned_at AS bannedAt
@@ -19,14 +19,14 @@ export function prepareUsersQueries(db) {
   const adminCountQuery = db.prepare('SELECT count(*) AS count FROM admins');
   const userCountQuery = db.prepare('SELECT count(*) AS count FROM users');
   const userLookupQuery = db.prepare(`SELECT telegram_id AS telegramId, accepted_at AS acceptedAt,
-      rules_version AS rulesVersion, balance,
+      rules_version AS rulesVersion,
       username, first_name AS firstName, last_name AS lastName, registered_at AS registeredAt,
       (SELECT count(*) FROM purchases WHERE purchases.telegram_id = users.telegram_id AND purchases.status = 'completed') AS purchaseCount,
       users.banned_at AS bannedAt
       FROM users WHERE telegram_id = ?`);
   const userByUsernameQuery =
     db.prepare(`SELECT telegram_id AS telegramId, accepted_at AS acceptedAt,
-      rules_version AS rulesVersion, balance, username, first_name AS firstName,
+      rules_version AS rulesVersion, username, first_name AS firstName,
       last_name AS lastName, registered_at AS registeredAt,
       (SELECT count(*) FROM purchases WHERE purchases.telegram_id = users.telegram_id AND purchases.status = 'completed') AS purchaseCount,
       users.banned_at AS bannedAt
@@ -39,7 +39,7 @@ export function prepareUsersQueries(db) {
         AND users.banned_at IS NULL
       ORDER BY users.telegram_id`);
   const pageUsersQuery = db.prepare(`SELECT telegram_id AS telegramId, username,
-      first_name AS firstName, last_name AS lastName, balance,
+      first_name AS firstName, last_name AS lastName,
       registered_at AS registeredAt,
       (SELECT count(*) FROM purchases WHERE purchases.telegram_id = users.telegram_id AND purchases.status = 'completed') AS purchaseCount,
       users.banned_at AS bannedAt
@@ -48,7 +48,7 @@ export function prepareUsersQueries(db) {
     `SELECT count(*) AS count FROM users WHERE ${BUYER_CONDITION}`,
   );
   const pageBuyersQuery = db.prepare(`SELECT telegram_id AS telegramId, username,
-      first_name AS firstName, last_name AS lastName, balance,
+      first_name AS firstName, last_name AS lastName,
       registered_at AS registeredAt,
       (SELECT count(*) FROM purchases WHERE purchases.telegram_id = users.telegram_id AND purchases.status = 'completed') AS purchaseCount,
       users.banned_at AS bannedAt

@@ -1,5 +1,5 @@
 export async function runApplication(
-  { bot, broadcastQueue, webhookServer = null, logger = console },
+  { bot, broadcastQueue, webhookServer = null, delivery = null, logger = console },
   store,
 ) {
   let shuttingDown = false;
@@ -40,7 +40,11 @@ export async function runApplication(
     await bot.launch({}, () => {
       logger.info?.('Бот подключён к Telegram. Хранилище SQLite готово.');
       if (shuttingDown) stop('shutdown');
-      else broadcastQueue.start();
+      else {
+        broadcastQueue.start();
+        // Purchases paid before a restart may still wait for their invite links.
+        delivery?.retryPending().catch(() => {});
+      }
     });
   } catch (error) {
     if (!shuttingDown) {

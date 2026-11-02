@@ -9,12 +9,13 @@ const MAX_BROADCAST_LENGTH = 3500;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const validId = (value) => /^[1-9]\d{0,19}$/.test(value);
 const validUserQuery = (value) => validId(value) || /^@?[A-Za-z0-9_]{1,32}$/.test(value);
-const USER_TOOL_INPUTS = new Set(['lookup', 'credit', 'ban', 'unban']);
+const USER_TOOL_INPUTS = new Set(['lookup', 'grant', 'ban', 'unban']);
 const USERS_CANCEL = 'admin_users_cancel';
 export function createContext({
   store,
   transport,
   broadcastQueue,
+  delivery,
   clock = Date.now,
   logger = console,
 }) {
@@ -33,6 +34,7 @@ export function createContext({
     store,
     transport,
     broadcastQueue,
+    delivery,
     clock,
     logger,
     inputs,

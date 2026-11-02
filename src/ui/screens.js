@@ -1,12 +1,5 @@
 import { emoji, button, urlButton, bold, strikethrough } from './emoji.js';
-import {
-  TOP_UP_AMOUNTS,
-  RUB_PER_STAR,
-  MIN_TOP_UP_AMOUNT,
-  MAX_TOP_UP_AMOUNT,
-  isTopUpAmount,
-  starsForRub,
-} from '../bot/top-up-options.js';
+import { RUB_PER_STAR, isStarsAmount, starsForRub } from '../domain/stars.js';
 const back = (target) => [[button('Назад', target, { icon: 'back' })]];
 export const money = (amount, currency = 'RUB') =>
   new Intl.NumberFormat('ru-RU', {
@@ -99,159 +92,90 @@ export function menuScreen(user = {}, isAdmin = false) {
     ],
     rows: [
       [button('Товары', 'products', { icon: 'cart' })],
-      [button('Профиль', 'profile', { icon: 'profile' })],
+      [button('Мои покупки', 'my_purchases', { icon: 'cart' })],
       ...(isAdmin ? [[button('Панель администратора', 'admin_menu', { icon: 'lock' })]] : []),
     ],
   };
 }
-export function profileScreen(user, record) {
-  const name = [user.first_name, user.last_name].filter(Boolean).join(' ') || 'не указано';
+const starsRate = () => String(RUB_PER_STAR).replace('.', ',');
+export function productBuyScreen(product) {
+  if (!product) return productScreen(undefined);
   return {
     parts: [
-      emoji('profile'),
-      ' ',
-      bold('Ваш профиль:'),
-      '\n\n',
-      emoji('star'),
-      ' ',
-      bold('Информация о покупках:'),
-      '\n',
-      emoji('diamond'),
-      ' Баланс: ',
-      bold(money(record.balance ?? 0)),
-      '\n',
       emoji('cart'),
-      ' Покупок: ',
-      bold(String(record.purchaseCount ?? 0)),
-      '\n\n',
-      emoji('star'),
       ' ',
-      bold('Информация о пользователе:'),
-      '\n',
-      emoji('question'),
-      ' ID пользователя: ',
-      bold(String(user.id)),
-      '\n',
-      emoji('question'),
-      ' Имя: ',
-      bold(name),
-      '\n',
-      emoji('question'),
-      ' Username: ',
-      bold(user.username ? `@${user.username}` : 'не указан'),
-    ],
-    rows: [
-      [button('Пополнить баланс', 'top_up', { icon: 'lightning' })],
-      [button('Мои покупки', 'my_purchases', { icon: 'cart' })],
-      ...back('main_menu'),
-    ],
-  };
-}
-const paymentMethodsNote = (freeKassa) =>
-  freeKassa
-    ? 'Оплата через Telegram Stars или картой / СБП.'
-    : 'Оплата только через Telegram Stars.';
-export function topUpScreen(record, { freeKassa = false } = {}) {
-  const amounts = TOP_UP_AMOUNTS.map((amount) => button(`${amount}₽`, `top_up_amount:${amount}`));
-  return {
-    parts: [
-      emoji('lightning'),
-      ' Пополнение баланса\n\n',
-      emoji('diamond'),
-      ` Текущий баланс: ${money(record.balance)}\n\n`,
-      emoji('question'),
-      ' На какую сумму пополнить баланс?\n\n',
+      bold(product.title),
+      '\n\n',
+      ...(product.description ? [emoji('bullet'), ` ${product.description}\n\n`] : []),
       emoji('bullet'),
-      ` ${paymentMethodsNote(freeKassa)}`,
-    ],
-    rows: [
-      amounts.slice(0, 2),
-      amounts.slice(2, 4),
-      amounts.slice(4),
-      [button('Ввести свою сумму', 'top_up_custom', { icon: 'lightning' })],
-      ...back('profile'),
-    ],
-  };
-}
-export function topUpMethodScreen(record, amount, { freeKassa = false } = {}) {
-  if (!isTopUpAmount(amount)) throw new TypeError('Недоступная сумма пополнения.');
-  const stars = starsForRub(amount);
-  return {
-    parts: [
-      emoji('lightning'),
-      ' Пополнение баланса\n\n',
-      emoji('check'),
-      ' Сумма: ',
-      bold(money(amount)),
-      '\n',
-      emoji('star'),
-      ` В Telegram Stars: ${stars} ⭐ (1 ⭐ = ${String(RUB_PER_STAR).replace('.', ',')} ₽)\n`,
-      emoji('diamond'),
-      ` Текущий баланс: ${money(record.balance)}\n\n`,
-      emoji('question'),
-      freeKassa
-        ? ' Выберите способ оплаты:'
-        : ' Оплата только через Telegram Stars. Подтвердите сумму:',
-    ],
-    rows: [
-      [button(`Telegram Stars (${stars} ⭐)`, `top_up_stars:${amount}`, { icon: 'star' })],
-      ...(freeKassa
-        ? [[button(`Карта / СБП (${money(amount)})`, `top_up_fk:${amount}`, { icon: 'diamond' })]]
-        : []),
-      ...back('top_up'),
-    ],
-  };
-}
-export function customTopUpScreen(invalid = false, { freeKassa = false } = {}) {
-  return {
-    parts: [
-      emoji('star'),
-      ' ',
-      bold('Введите свою сумму'),
+      ' Цена: ',
+      ...productPriceParts(product),
       '\n\n',
-      ...(invalid ? ['Некорректная сумма. ', '\n\n'] : []),
-      `Отправьте целое число от ${MIN_TOP_UP_AMOUNT} до ${MAX_TOP_UP_AMOUNT} — сумму пополнения в рублях, без копеек и обозначения валюты.\n\n`,
-      `${paymentMethodsNote(freeKassa)} Курс Stars: 1 ⭐ = ${String(RUB_PER_STAR).replace('.', ',')} ₽, количество звёзд округляется вверх.\n\n`,
-      'Например: 500. Для отмены нажмите кнопку ниже или отправьте /cancel.',
+      'После оплаты бот пришлёт одноразовую ссылку для входа в канал. ',
+      'Она также сохранится в разделе «Мои покупки».',
     ],
-    rows: [[button('Отмена', 'top_up', { icon: 'cancel' })]],
+    rows: [[button('Купить', `buy:${product.id}`, { icon: 'check' })], ...back('products')],
   };
 }
-export function starsInvoiceSentScreen(amount) {
+export function paymentMethodScreen(product, { freeKassa = false } = {}) {
+  if (!product) return productScreen(undefined);
+  const starsAvailable = isStarsAmount(product.price);
+  const rows = [];
+  if (starsAvailable)
+    rows.push([
+      button(
+        `Telegram Stars (${starsForRub(product.price)} ⭐)`,
+        `buy_stars:${product.id}:${product.price}`,
+        { icon: 'star' },
+      ),
+    ]);
+  if (freeKassa)
+    rows.push([
+      button(
+        `Карта / СБП (${money(product.price, product.currency)})`,
+        `buy_fk:${product.id}:${product.price}`,
+        { icon: 'diamond' },
+      ),
+    ]);
+  return {
+    parts: [
+      emoji('cart'),
+      ' ',
+      bold(product.title),
+      '\n\n',
+      emoji('bullet'),
+      ' К оплате: ',
+      ...productPriceParts(product),
+      '\n',
+      ...(starsAvailable
+        ? [
+            emoji('star'),
+            ` В Telegram Stars: ${starsForRub(product.price)} ⭐ (1 ⭐ = ${starsRate()} ₽)\n`,
+          ]
+        : []),
+      '\n',
+      emoji('question'),
+      rows.length
+        ? ' Выберите способ оплаты:'
+        : ' Сейчас оплата этого товара недоступна. Свяжитесь с администратором.',
+    ],
+    rows: [...rows, ...back(`product:${product.id}`)],
+  };
+}
+export function starsInvoiceSentScreen(order) {
   return {
     parts: [
       emoji('star'),
       ' ',
       bold('Счёт отправлен'),
       '\n\n',
-      `Ниже счёт на ${starsForRub(amount)} ⭐ (${money(amount)}). Нажмите в нём кнопку оплаты. `,
-      'Баланс пополнится сразу после оплаты.',
+      `Ниже счёт на ${order.stars} ⭐ (${money(order.amount)}) за «${order.productTitle}». `,
+      'Нажмите в нём кнопку оплаты, ссылка на канал придёт сразу после оплаты.',
     ],
-    rows: back(`top_up_amount:${amount}`),
+    rows: back(`buy:${order.productId}`),
   };
 }
-export function starsCreditedScreen(result) {
-  return {
-    parts: [
-      emoji('check'),
-      ' ',
-      bold('Баланс пополнен!'),
-      '\n\n',
-      emoji('bullet'),
-      ' Зачислено: ',
-      bold(money(result.amount)),
-      ` (${result.stars} ⭐)\n`,
-      emoji('diamond'),
-      ' Текущий баланс: ',
-      bold(money(result.balance)),
-    ],
-    rows: [
-      [button('Товары', 'products', { icon: 'cart' })],
-      [button('Профиль', 'profile', { icon: 'profile' })],
-    ],
-  };
-}
-export function freeKassaInvoiceScreen(amount, url) {
+export function freeKassaInvoiceScreen(order, url) {
   return {
     parts: [
       emoji('diamond'),
@@ -259,35 +183,37 @@ export function freeKassaInvoiceScreen(amount, url) {
       bold('Ссылка на оплату готова'),
       '\n\n',
       emoji('bullet'),
+      ` Товар: ${order.productTitle}\n`,
+      emoji('bullet'),
       ' Сумма: ',
-      bold(money(amount)),
+      bold(money(order.amount)),
       '\n\n',
       'Нажмите «Оплатить» и выберите удобный способ на странице FreeKassa. ',
-      'Баланс пополнится автоматически, бот пришлёт уведомление.',
+      'Ссылка на канал придёт в этот чат автоматически после оплаты.',
     ],
-    rows: [[urlButton('Оплатить', url, { icon: 'link' })], ...back(`top_up_amount:${amount}`)],
+    rows: [[urlButton('Оплатить', url, { icon: 'link' })], ...back(`buy:${order.productId}`)],
   };
 }
-export function freeKassaCreditedScreen(result) {
+export function deliveryDelayedScreen(purchase) {
   return {
     parts: [
-      emoji('check'),
+      emoji('hourglass'),
       ' ',
-      bold('Баланс пополнен!'),
+      bold('Оплата получена'),
       '\n\n',
-      emoji('bullet'),
-      ' Зачислено: ',
-      bold(money(result.amount)),
-      '\n',
-      emoji('diamond'),
-      ' Текущий баланс: ',
-      bold(money(result.balance)),
+      `Покупка №${purchase.id} («${purchase.productTitle}») оплачена, но выдать ссылку прямо сейчас не получилось. `,
+      'Администратор уже получил уведомление. Ссылка придёт в этот чат, как только проблема будет решена.',
     ],
-    rows: [
-      [button('Товары', 'products', { icon: 'cart' })],
-      [button('Профиль', 'profile', { icon: 'profile' })],
-    ],
+    rows: [[button('Мои покупки', 'my_purchases', { icon: 'cart' })]],
   };
+}
+export function duplicatePaymentText(refunded) {
+  return refunded
+    ? 'Этот товар у вас уже куплен, поэтому повторная оплата возвращена.'
+    : 'Этот товар у вас уже куплен. Повторную оплату вернёт администратор, он уже получил уведомление.';
+}
+export function legacySectionText() {
+  return 'Этот раздел обновлён: баланса больше нет, товары покупаются напрямую.';
 }
 export function purchasesScreen({ items, hasNext }, page = 0) {
   const parts = [emoji('cart'), ' Мои покупки\n\n'];
@@ -320,7 +246,8 @@ export function purchasesScreen({ items, hasNext }, page = 0) {
         ` Дата: ${displayDate}\n`,
         emoji('link'),
         ' Ссылка: ',
-        purchase.inviteLink ?? 'не выдавалась',
+        purchase.inviteLink ??
+          (purchase.status === 'pending' ? 'выдаётся, придёт в этот чат' : 'не выдавалась'),
         '\n\n',
       );
     }
@@ -333,7 +260,7 @@ export function purchasesScreen({ items, hasNext }, page = 0) {
     navigation.push(button('Предыдущая страница', `my_purchases:${page - 1}`, { icon: 'back' }));
   if (hasNext) navigation.push(button('Следующая страница', `my_purchases:${page + 1}`));
   if (navigation.length) rows.push(navigation);
-  rows.push(...back('profile'));
+  rows.push(...back('main_menu'));
   return { parts, rows };
 }
 function productPriceParts(product) {
@@ -380,35 +307,6 @@ export function productsScreen({ items }, ownedProductIds = []) {
   rows.push(...back('main_menu'));
   return { parts, rows };
 }
-export function purchaseConfirmScreen(product, balance) {
-  if (!product) return productScreen(undefined);
-  return {
-    parts: [
-      emoji('question'),
-      ' ',
-      bold('Подтвердить покупку?'),
-      '\n\n',
-      emoji('bullet'),
-      ` Товар: ${product.title}\n`,
-      emoji('bullet'),
-      ' Цена: ',
-      ...productPriceParts(product),
-      '\n',
-      emoji('bullet'),
-      ` Текущий баланс: ${money(balance)}\n\n`,
-      'Средства будут списаны с баланса. После оплаты вы получите одноразовую ссылку для входа в канал, ',
-      'она также сохранится в разделе «Мои покупки».',
-    ],
-    rows: [
-      [
-        button('Подтвердить оплату', `confirm_purchase:${product.id}:${product.price}`, {
-          icon: 'check',
-        }),
-      ],
-      ...back('products'),
-    ],
-  };
-}
 export function purchaseCompleteScreen(result) {
   return {
     parts: [
@@ -420,11 +318,7 @@ export function purchaseCompleteScreen(result) {
       ` Товар: ${result.productTitle}\n`,
       emoji('bullet'),
       ' Оплачено: ',
-      bold(money(result.price, result.currency)),
-      '\n',
-      emoji('bullet'),
-      ' Новый баланс: ',
-      bold(money(result.balance)),
+      bold(money(result.total, result.currency)),
       '\n',
       emoji('bullet'),
       ` Номер покупки: ${result.purchaseId}\n\n`,
@@ -445,13 +339,10 @@ export function purchaseCompleteScreen(result) {
   };
 }
 export function purchaseFailedText() {
-  return 'Не удалось купить товар. Деньги не списаны. Попробуйте позже или свяжитесь с администратором.';
-}
-export function insufficientFundsText(result) {
-  return `Недостаточно средств.\nТекущий баланс: ${money(result.balance)}\nСтоимость товара: ${money(result.price)}`;
+  return 'Не удалось оформить заказ. Деньги не списаны. Попробуйте позже или свяжитесь с администратором.';
 }
 export function changedPriceText() {
-  return 'Цена товара изменилась. Проверьте новую цену и подтвердите покупку ещё раз.';
+  return 'Цена товара изменилась. Проверьте новую цену и нажмите «Купить» ещё раз.';
 }
 export function productScreen(product) {
   return {

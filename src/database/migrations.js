@@ -227,6 +227,36 @@ const migrations = [
   CREATE INDEX freekassa_orders_user ON freekassa_orders(telegram_id, status, id);
 `,
   },
+  {
+    version: 15,
+    sql: `
+  -- Отказ от баланса: товары оплачиваются напрямую через заказы.
+  -- top_up_admin_messages удаляется первой, иначе DROP top_ups каскадно чистит её построчно.
+  DROP TABLE top_up_admin_messages;
+  DROP TABLE top_ups;
+  DROP TABLE admin_balance_transactions;
+  DROP TABLE freekassa_orders;
+  ALTER TABLE users DROP COLUMN balance;
+  ALTER TABLE purchases ADD COLUMN source TEXT NOT NULL DEFAULT 'balance'
+    CHECK (source IN ('balance', 'stars', 'freekassa', 'manual'));
+  CREATE TABLE orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id TEXT NOT NULL REFERENCES users(telegram_id) ON DELETE RESTRICT,
+    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+    product_title TEXT NOT NULL CHECK (length(trim(product_title)) BETWEEN 1 AND 200),
+    amount INTEGER NOT NULL CHECK (typeof(amount) = 'integer' AND amount > 0),
+    method TEXT NOT NULL CHECK (method IN ('stars', 'freekassa')),
+    stars INTEGER CHECK (stars IS NULL OR (typeof(stars) = 'integer' AND stars > 0)),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'duplicate')),
+    payment_id TEXT,
+    purchase_id INTEGER REFERENCES purchases(id) ON DELETE RESTRICT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    paid_at TEXT
+  );
+  CREATE UNIQUE INDEX orders_payment ON orders(method, payment_id) WHERE payment_id IS NOT NULL;
+  CREATE INDEX orders_open ON orders(telegram_id, product_id, method, status);
+`,
+  },
 ];
 export function migrateSchema(db) {
   db.exec('BEGIN IMMEDIATE');

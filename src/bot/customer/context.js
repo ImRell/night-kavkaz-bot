@@ -6,7 +6,6 @@ export function createContext({
   rulesVersion,
   channels = {},
   hooks = {},
-  freeKassaEnabled = false,
   logger = console,
 }) {
   const opensCatalogBelow = (ctx) => {
@@ -45,7 +44,6 @@ export function createContext({
     rulesVersion,
     channels,
     hooks,
-    freeKassaEnabled,
     logger,
     opensCatalogBelow,
     hasAgreement,

@@ -8,7 +8,7 @@ import { handleBroadcastInput } from './input/broadcast.js';
 import { handleAdminsInput } from './input/admins.js';
 import { handleModerationInput } from './input/moderation.js';
 import { handleLookupInput } from './input/lookup.js';
-import { handleBalanceInput } from './input/balance.js';
+import { handleGrantInput } from './input/grant.js';
 const inputHandlers = {
   discount_percent: handleDiscountsInput,
   discount_end: handleDiscountsInput,
@@ -21,7 +21,7 @@ const inputHandlers = {
   ban: handleModerationInput,
   unban: handleModerationInput,
   lookup: handleLookupInput,
-  credit: handleBalanceInput,
+  grant: handleGrantInput,
 };
 export function registerInputHandlers(bot, context) {
   const { store, clock, inputs, admin, showInputResult, INPUT_TTL_MS, USER_TOOL_INPUTS } = context;

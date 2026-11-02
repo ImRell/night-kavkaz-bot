@@ -34,13 +34,6 @@ export function adminMenuScreen(maintenanceMode = false) {
     ],
   };
 }
-const adminMoney = (amount) =>
-  new Intl.NumberFormat('ru-RU', {
-    style: 'currency',
-    currency: 'RUB',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(amount);
 function displayDate(value) {
   if (!value) return 'нет данных';
   const date = new Date(value);
@@ -66,7 +59,7 @@ export function adminUsersScreen(
   if (!items.length) {
     parts.push(
       buyersOnly
-        ? 'Пока нет пользователей с покупками или положительным балансом.'
+        ? 'Пока нет пользователей с покупками.'
         : 'Пока нет зарегистрированных пользователей.',
     );
   } else {
@@ -82,8 +75,6 @@ export function adminUsersScreen(
         ` Username: ${user.username ? `@${user.username}` : 'не указан'}\n`,
         emoji('question'),
         ` Full name: ${fullName}\n`,
-        emoji('question'),
-        ` Баланс: ${adminMoney(user.balance)}\n`,
         emoji('question'),
         ` Покупок: ${user.purchaseCount}\n`,
         emoji('question'),
@@ -116,7 +107,7 @@ export function adminUsersScreen(
   rows.push(
     [
       button('Проверить пользователя', 'admin_lookup', { icon: 'question' }),
-      button('Выдать баланс', 'admin_credit', { icon: 'diamond' }),
+      button('Выдать товар', 'admin_grant', { icon: 'diamond' }),
     ],
     [
       button('Забанить', 'admin_ban', { icon: 'cancel', style: 'danger' }),
@@ -191,8 +182,6 @@ export function adminAdminsScreen(data, canManage = false, notice = '') {
         emoji('question'),
         ` Добавил: ${admin.addedBy ?? 'системная настройка'}\n`,
         emoji('question'),
-        ` Баланс: ${admin.balance == null ? 'профиль не зарегистрирован' : adminMoney(admin.balance)}\n`,
-        emoji('question'),
         ` Покупок: ${admin.purchaseCount ?? 0}\n`,
       );
       if (index < items.length - 1) parts.push('\n────────────\n\n');
@@ -235,7 +224,6 @@ export function adminLookupScreen(user, query) {
       ` Username: ${user.username ? `@${user.username}` : 'не указан'}\n`,
     );
     parts.push(emoji('question'), ` Full name: ${fullName}\n`);
-    parts.push(emoji('question'), ` Баланс: ${adminMoney(user.balance)}\n`);
     parts.push(emoji('question'), ` Покупок: ${user.purchaseCount}\n`);
     parts.push(emoji('question'), ` Регистрация: ${displayDate(user.registeredAt)}\n`);
     parts.push(
@@ -246,29 +234,63 @@ export function adminLookupScreen(user, query) {
   }
   return { parts, rows: usersBackRow() };
 }
-export function adminCreditResultScreen(result) {
+export function adminGrantProductsScreen(user, query, products, ownedProductIds = []) {
+  if (!user)
+    return {
+      parts: [emoji('warning'), ` Пользователь ${query} не зарегистрирован в базе данных.`],
+      rows: usersBackRow(),
+    };
+  const owned = new Set(ownedProductIds);
+  const available = products.filter((product) => !owned.has(product.id));
+  const parts = [
+    emoji('diamond'),
+    ' ',
+    bold('Выдать товар'),
+    '\n\n',
+    emoji('bullet'),
+    ` Пользователь: ${userLabel(user.telegramId, user)}\n\n`,
+    available.length
+      ? 'Выберите товар. Бот создаст покупку и пришлёт пользователю одноразовую ссылку.'
+      : 'У пользователя уже есть все товары.',
+  ];
+  const rows = available.map((product) => [
+    button(product.title.slice(0, 60), `admin_grant:${user.telegramId}:${product.id}`, {
+      icon: 'cart',
+    }),
+  ]);
+  return { parts, rows: [...rows, ...usersBackRow()] };
+}
+export function adminGrantResultScreen(result) {
+  const delivered = result.delivery?.status === 'delivered';
   const messages = {
-    not_found: `Пользователь ${result.query ?? result.telegramId} не зарегистрирован в базе данных. Баланс не изменён.`,
-    balance_limit: 'Операция превышает допустимый максимальный баланс. Баланс не изменён.',
-    forbidden: 'Недостаточно прав. Баланс не изменён.',
+    user_not_found: `Пользователь ${result.telegramId} не зарегистрирован в базе данных.`,
+    unavailable: 'Товар недоступен или снят с продажи.',
+    already_owned: `У пользователя уже есть «${result.productTitle}».`,
+    forbidden: 'Недостаточно прав.',
   };
-  const parts =
-    result.status === 'credited'
-      ? [
-          emoji('check'),
-          ' ',
-          bold('Баланс пополнен.'),
-          '\n\n',
-          emoji('bullet'),
-          ` ID пользователя: ${result.telegramId}\n`,
-          emoji('bullet'),
-          ` Зачислено: ${adminMoney(result.amount)}\n`,
-          emoji('bullet'),
-          ` Новый баланс: ${adminMoney(result.balance)}\n`,
-          'Операция сохранена в журнале.',
-        ]
-      : [emoji('warning'), ' ', messages[result.status] ?? 'Не удалось пополнить баланс.'];
-  return { parts, rows: usersBackRow() };
+  if (result.status !== 'granted' && result.status !== 'redeliver')
+    return {
+      parts: [emoji('warning'), ' ', messages[result.status] ?? 'Не удалось выдать товар.'],
+      rows: usersBackRow(),
+    };
+  return {
+    parts: [
+      emoji(delivered ? 'check' : 'warning'),
+      ' ',
+      bold(delivered ? 'Товар выдан.' : 'Ссылку выдать не удалось.'),
+      '\n\n',
+      emoji('bullet'),
+      ` Пользователь: ${result.telegramId}\n`,
+      emoji('bullet'),
+      ` Товар: ${result.productTitle}\n`,
+      emoji('bullet'),
+      ` Покупка №${result.purchaseId}\n\n`,
+      delivered
+        ? 'Пользователь получил одноразовую ссылку в чате с ботом.'
+        : `Причина: ${result.delivery?.reason ?? 'покупка уже обрабатывается'}. Покупка сохранена, повторите выдачу позже.`,
+    ],
+    rows: usersBackRow(),
+  };
 }
 export function adminBanResultScreen(result, query) {
   const target = result.telegramId ?? query;

@@ -6,6 +6,7 @@ import { registerPaymentHandlers } from './bot/payments.js';
 import { registerAdminHandlers } from './bot/admin.js';
 import { createTransport } from './bot/transport.js';
 import { createBroadcastQueue } from './bot/broadcast-queue.js';
+import { createDelivery } from './bot/delivery.js';
 import { createFreeKassa } from './integrations/freekassa.js';
 import { createWebhookServer } from './http/server.js';
 export function createApplication(config, store, { logger = createLogger() } = {}) {
@@ -18,25 +19,32 @@ export function createApplication(config, store, { logger = createLogger() } = {
   }
   const freeKassa = config.freeKassa ? createFreeKassa(config.freeKassa) : null;
   if (!freeKassa) logger.warn('FreeKassa не настроена: доступна только оплата через Stars.');
+  const delivery = createDelivery({
+    store,
+    telegram: bot.telegram,
+    transport,
+    channels: config.channels,
+    logger,
+  });
   registerHandlers(bot, {
     store,
     rulesVersion: config.rulesVersion,
     transport,
     channels: config.channels,
     hooks,
-    freeKassaEnabled: Boolean(freeKassa),
     logger,
   });
   const { handleFreeKassa } = registerPaymentHandlers(bot, {
     store,
     transport,
     rulesVersion: config.rulesVersion,
-    hooks,
+    channels: config.channels,
+    delivery,
     logger,
     freeKassa,
   });
   const broadcastQueue = createBroadcastQueue({ store, telegram: bot.telegram, transport, logger });
-  registerAdminHandlers(bot, { store, transport, broadcastQueue, logger });
+  registerAdminHandlers(bot, { store, transport, broadcastQueue, delivery, logger });
   const webhookServer = freeKassa
     ? createWebhookServer({
         http: config.freeKassa.http,
@@ -46,5 +54,5 @@ export function createApplication(config, store, { logger = createLogger() } = {
         logger,
       })
     : null;
-  return { bot, broadcastQueue, webhookServer, logger };
+  return { bot, broadcastQueue, webhookServer, delivery, logger };
 }

@@ -1,8 +1,10 @@
 import { createContext } from './payments/context.js';
+import { registerBuyHandlers } from './payments/buy.js';
 import { registerStarsHandlers } from './payments/stars.js';
 import { registerFreeKassaHandlers } from './payments/freekassa.js';
 export function registerPaymentHandlers(bot, { freeKassa = null, ...options }) {
-  const context = createContext(options);
+  const context = createContext({ ...options, freeKassaEnabled: Boolean(freeKassa) });
+  registerBuyHandlers(bot, context);
   registerStarsHandlers(bot, context);
   const handleFreeKassa = freeKassa ? registerFreeKassaHandlers(bot, context, freeKassa) : null;
   return { handleFreeKassa };

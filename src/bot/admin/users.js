@@ -1,5 +1,9 @@
 import { answerCallback } from '../transport.js';
-import { adminAdminsScreen, adminUsersScreen } from '../../ui/admin/screens.js';
+import {
+  adminAdminsScreen,
+  adminUsersScreen,
+  adminGrantResultScreen,
+} from '../../ui/admin/screens.js';
 export function createDirectoryTools(context) {
   const { store, transport, inputs, admin, deny } = context;
   async function showAdmins(ctx, page = 0) {
@@ -23,8 +27,19 @@ export function createDirectoryTools(context) {
   return { showAdmins, showUsers };
 }
 export function registerUsersHandlers(bot, context) {
-  const { store, transport, inputs, admin, deny, startInput, showAdmins, showUsers, USERS_CANCEL } =
-    context;
+  const {
+    store,
+    transport,
+    logger,
+    inputs,
+    admin,
+    deny,
+    startInput,
+    showAdmins,
+    showUsers,
+    delivery,
+    USERS_CANCEL,
+  } = context;
   bot.action(/^admin_add:(\d{1,6})$/, async (ctx) => {
     if (!admin(ctx)) return deny(ctx);
     if (!store.isSystemAdmin(ctx.from.id))
@@ -148,15 +163,31 @@ export function registerUsersHandlers(bot, context) {
       { cancelData: USERS_CANCEL },
     );
   });
-  bot.action('admin_credit', async (ctx) => {
+  bot.action(['admin_grant', 'admin_credit'], async (ctx) => {
     if (!admin(ctx)) return deny(ctx);
     await startInput(
       ctx,
-      'credit',
-      'Выдать баланс',
-      'Отправьте Telegram ID или username и сумму в рублях через пробел, например: @username 500 или 123456789 500. Начисление доступно только зарегистрированным пользователям.',
+      'grant',
+      'Выдать товар',
+      'Отправьте Telegram ID или username (с @ или без него). Выдать товар можно только зарегистрированному пользователю.',
       { cancelData: USERS_CANCEL },
     );
+  });
+  bot.action(/^admin_grant:([1-9]\d{0,19}):(\d{1,15})$/, async (ctx) => {
+    if (!admin(ctx)) return deny(ctx);
+    inputs.delete(String(ctx.from.id));
+    const result = store.grantProduct(ctx.from.id, ctx.match[1], Number(ctx.match[2]));
+    const canDeliver = result.status === 'granted' || result.status === 'redeliver';
+    await answerCallback(ctx, canDeliver ? 'Выдаю товар…' : undefined);
+    const outcome = canDeliver ? await delivery.deliver(result.purchaseId) : null;
+    if (canDeliver)
+      logger.info('Администратор выдал товар.', {
+        adminId: ctx.from.id,
+        userId: result.telegramId,
+        purchaseId: result.purchaseId,
+        status: outcome.status,
+      });
+    await transport.show(ctx, adminGrantResultScreen({ ...result, delivery: outcome }));
   });
   bot.action('admin_ban', async (ctx) => {
     if (!admin(ctx)) return deny(ctx);
