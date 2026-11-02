@@ -144,24 +144,10 @@ export function productBuyScreen(product) {
     rows: [[button('Купить', `buy:${product.id}`, { icon: 'check' })], ...back('products')],
   };
 }
-export function paymentMethodScreen(product, { freeKassa = false, xRocket = false } = {}) {
+export function paymentMethodScreen(product) {
   if (!product) return productScreen(undefined);
   const starsAvailable = isStarsAmount(product.price);
   const rows = [];
-  if (freeKassa)
-    rows.push([
-      button(
-        `Карта / СБП (${money(product.price, product.currency)})`,
-        `buy_fk:${product.id}:${product.price}`,
-        { icon: 'diamond' },
-      ),
-    ]);
-  if (xRocket)
-    rows.push([
-      button('Криптовалюта (xRocket)', `buy_xr:${product.id}:${product.price}`, {
-        icon: 'lightning',
-      }),
-    ]);
   if (starsAvailable)
     rows.push([
       button(
@@ -199,48 +185,6 @@ export function starsInvoiceSentScreen(order) {
       'Нажмите в нём кнопку оплаты, ссылка на канал придёт сразу после оплаты.',
     ],
     rows: back(`buy:${order.productId}`),
-  };
-}
-export function freeKassaInvoiceScreen(order, url) {
-  return {
-    parts: [
-      emoji('diamond'),
-      ' ',
-      bold('Ссылка на оплату готова'),
-      '\n\n',
-      emoji('bullet'),
-      ` Товар: ${order.productTitle}\n`,
-      emoji('bullet'),
-      ' Сумма: ',
-      bold(money(order.amount)),
-      '\n\n',
-      'Нажмите «Оплатить» и выберите удобный способ на странице FreeKassa. ',
-      'Ссылка на канал придёт в этот чат автоматически после оплаты.',
-    ],
-    rows: [[urlButton('Оплатить', url, { icon: 'link' })], ...back(`buy:${order.productId}`)],
-  };
-}
-export function cryptoInvoiceScreen(order, invoice) {
-  return {
-    parts: [
-      emoji('lightning'),
-      ' ',
-      bold('Счёт на оплату готов'),
-      '\n\n',
-      emoji('bullet'),
-      ` Товар: ${order.productTitle}\n`,
-      emoji('bullet'),
-      ' Сумма: ',
-      bold(`${invoice.cryptoAmount} ${invoice.cryptoCurrency}`),
-      ` (${money(order.amount)})\n\n`,
-      'Нажмите «Оплатить» — откроется счёт в @xRocket. Оплатить можно с баланса xRocket ',
-      'или пополнив его в удобной сети. Счёт действует 1 час, ',
-      'ссылка на канал придёт в этот чат автоматически после оплаты.',
-    ],
-    rows: [
-      [urlButton('Оплатить', invoice.payUrl, { icon: 'link' })],
-      ...back(`buy:${order.productId}`),
-    ],
   };
 }
 export function deliveryDelayedScreen(purchase) {

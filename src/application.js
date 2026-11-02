@@ -9,15 +9,7 @@ import { createBroadcastQueue } from './bot/broadcast-queue.js';
 import { createDelivery } from './bot/delivery.js';
 import { createAccessGate } from './bot/access-gate.js';
 import { createBackups } from './bot/backup.js';
-import { createFreeKassa } from './integrations/freekassa.js';
-import { createXRocket } from './integrations/xrocket.js';
-import {
-  createWebhookServer,
-  freeKassaRoute,
-  xRocketRoute,
-  FREEKASSA_NOTIFY_PATH,
-  XROCKET_NOTIFY_PATH,
-} from './http/server.js';
+import { createWebhookServer } from './http/server.js';
 export function createApplication(config, store, { logger = createLogger() } = {}) {
   const bot = new Telegraf(config.token);
   const transport = createTransport({ logger });
@@ -25,10 +17,6 @@ export function createApplication(config, store, { logger = createLogger() } = {
     if (!config.channels[slug])
       logger.warn(`Не указан ${name}: покупка этого товара будет недоступна.`);
   }
-  const freeKassa = config.freeKassa ? createFreeKassa(config.freeKassa) : null;
-  if (!freeKassa) logger.warn('FreeKassa не настроена: оплата картой недоступна.');
-  const xRocket = config.xRocket ? createXRocket(config.xRocket) : null;
-  if (!xRocket) logger.warn('xRocket не настроен: оплата криптовалютой недоступна.');
   const delivery = createDelivery({
     store,
     telegram: bot.telegram,
@@ -51,28 +39,18 @@ export function createApplication(config, store, { logger = createLogger() } = {
     channels: config.channels,
     logger,
   });
-  const { handleFreeKassa, handleXRocket } = registerPaymentHandlers(bot, {
+  registerPaymentHandlers(bot, {
     store,
     transport,
     gate,
     channels: config.channels,
     delivery,
     logger,
-    freeKassa,
-    xRocket,
   });
   const broadcastQueue = createBroadcastQueue({ store, telegram: bot.telegram, transport, logger });
   registerAdminHandlers(bot, { store, transport, broadcastQueue, delivery, logger });
+  // Payment provider webhooks are registered here; the server stays off while there are none.
   const routes = {};
-  if (freeKassa)
-    routes[FREEKASSA_NOTIFY_PATH] = freeKassaRoute({
-      allowedIps: config.freeKassa.allowedIps,
-      freeKassa,
-      handle: handleFreeKassa,
-      logger,
-    });
-  if (xRocket)
-    routes[XROCKET_NOTIFY_PATH] = xRocketRoute({ xRocket, handle: handleXRocket, logger });
   const webhookServer = Object.keys(routes).length
     ? createWebhookServer({ http: config.http, routes, logger })
     : null;

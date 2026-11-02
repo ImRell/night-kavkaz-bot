@@ -13,7 +13,6 @@ export function createContext({
   gate,
   delivery,
   channels = {},
-  methods = {},
   logger = console,
 }) {
   const agreed = (id) => {
@@ -33,7 +32,7 @@ export function createContext({
       productsScreen(store.listProducts(), store.listPurchasedProductIds(ctx.from.id)),
     );
   const showMethods = (ctx, productId) =>
-    transport.show(ctx, paymentMethodScreen(store.getProduct(productId), methods));
+    transport.show(ctx, paymentMethodScreen(store.getProduct(productId)));
   // Shared "Buy" step for every payment method: validates the product and opens an order.
   async function openOrder(ctx, method) {
     if (!(await requireAgreement(ctx))) return null;
@@ -128,7 +127,6 @@ export function createContext({
     transport,
     logger,
     delivery,
-    methods,
     agreed,
     requireAgreement,
     showProducts,

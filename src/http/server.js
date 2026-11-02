@@ -1,15 +1,12 @@
 import { createServer } from 'node:http';
 import { isIP } from 'node:net';
-import { URLSearchParams } from 'node:url';
 const MAX_BODY_BYTES = 16 * 1024;
 const REQUEST_TIMEOUT_MS = 10_000;
-export const FREEKASSA_NOTIFY_PATH = '/freekassa/notify';
-export const XROCKET_NOTIFY_PATH = '/xrocket/notify';
 function send(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8' });
   res.end(body);
 }
-function readBody(req) {
+export function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let size = 0;
@@ -41,43 +38,6 @@ function clientIp(req, trustProxy) {
     if (isIP(ip)) return ip;
   }
   return socketIp;
-}
-export function freeKassaRoute({ allowedIps, freeKassa, handle, logger }) {
-  const allowed = new Set(allowedIps);
-  return async (req, { ip }) => {
-    if (!allowed.has(ip)) {
-      logger.warn('Оповещение FreeKassa с неразрешённого IP.', { ip });
-      return [403, 'Forbidden'];
-    }
-    const notification = freeKassa.parseNotification(new URLSearchParams(await readBody(req)));
-    if (notification.error) {
-      logger.warn('Отклонено оповещение FreeKassa.', { code: notification.error, ip });
-      return [400, notification.error];
-    }
-    return (await handle(notification)) ? [200, 'YES'] : [400, 'rejected'];
-  };
-}
-// xRocket pauses ALL app webhooks after repeated failures, so anything with a valid signature
-// is acknowledged with 200; problems are logged for manual review instead of being retried.
-export function xRocketRoute({ xRocket, handle, logger }) {
-  return async (req, { ip }) => {
-    const rawBody = await readBody(req);
-    if (!xRocket.verifySignature(req.headers, rawBody)) {
-      logger.warn('Отклонён вебхук xRocket: неверная подпись.', { ip });
-      return [401, 'invalid signature'];
-    }
-    let event;
-    try {
-      event = JSON.parse(rawBody);
-    } catch {
-      logger.error('Вебхук xRocket с некорректным JSON.');
-      return [200, 'ok'];
-    }
-    const paid = xRocket.parseWebhook(event);
-    if (paid.error) logger.error('Отклонён вебхук xRocket.', { code: paid.error });
-    else if (!paid.ignore) await handle(paid);
-    return [200, 'ok'];
-  };
 }
 export function createWebhookServer({ http, routes, logger }) {
   async function route(req, res) {

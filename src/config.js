@@ -19,54 +19,11 @@ function readChannels(env) {
   }
   return Object.freeze(channels);
 }
-// Official FreeKassa notification servers.
-export const FREEKASSA_IPS = Object.freeze([
-  '168.119.157.136',
-  '168.119.60.227',
-  '178.154.197.79',
-  '51.250.54.238',
-]);
 function readPort(value, name) {
   const port = Number(value);
   if (!Number.isSafeInteger(port) || port < 1 || port > 65535)
     throw new Error(`${name} должен быть портом от 1 до 65535.`);
   return port;
-}
-function readFreeKassa(env) {
-  const merchantId = env.FREEKASSA_MERCHANT_ID?.trim();
-  if (!merchantId) return null;
-  if (!/^[1-9]\d{0,15}$/.test(merchantId))
-    throw new Error('FREEKASSA_MERCHANT_ID должен быть числовым ID магазина.');
-  const secret1 = env.FREEKASSA_SECRET_1 ?? '';
-  const secret2 = env.FREEKASSA_SECRET_2 ?? '';
-  if (!secret1 || !secret2)
-    throw new Error('Укажите FREEKASSA_SECRET_1 и FREEKASSA_SECRET_2 в .env.');
-  const rawIps = env.FREEKASSA_ALLOWED_IPS?.trim();
-  const allowedIps = rawIps
-    ? rawIps
-        .split(',')
-        .map((ip) => ip.trim())
-        .filter(Boolean)
-    : FREEKASSA_IPS;
-  return Object.freeze({
-    merchantId,
-    secret1,
-    secret2,
-    allowedIps: Object.freeze([...new Set(allowedIps)]),
-  });
-}
-function readXRocket(env) {
-  const apiKey = env.XROCKET_API_KEY?.trim();
-  if (!apiKey) return null;
-  const webhookSecret = env.XROCKET_WEBHOOK_SECRET?.trim();
-  if (!webhookSecret) throw new Error('Укажите XROCKET_WEBHOOK_SECRET в .env.');
-  const currency = env.XROCKET_CURRENCY?.trim() || 'USDT';
-  if (!/^[A-Za-z0-9]{2,16}$/.test(currency))
-    throw new Error('XROCKET_CURRENCY должен быть кодом валюты, например USDT.');
-  const webhookUrl = env.XROCKET_WEBHOOK_URL?.trim() || null;
-  if (webhookUrl && !/^https:\/\/\S{1,490}$/.test(webhookUrl))
-    throw new Error('XROCKET_WEBHOOK_URL должен начинаться с https://.');
-  return Object.freeze({ apiKey, webhookSecret, currency, webhookUrl });
 }
 function readHttp(env) {
   const trustProxy = env.HTTP_TRUST_PROXY?.trim().toLowerCase() || 'false';
@@ -94,8 +51,6 @@ export function readConfig(env = process.env) {
     rulesVersion: 1,
     bootstrapAdminIds: [...new Set(bootstrapAdminIds)],
     channels: readChannels(env),
-    freeKassa: readFreeKassa(env),
-    xRocket: readXRocket(env),
     http: readHttp(env),
   };
 }

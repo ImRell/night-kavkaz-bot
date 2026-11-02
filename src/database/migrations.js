@@ -305,6 +305,19 @@ const migrations = [
   UPDATE users SET captcha_passed_at = accepted_at WHERE accepted_at IS NOT NULL;
 `,
   },
+  {
+    version: 18,
+    sql: `
+  -- Отказ от FreeKassa и xRocket: неоплаченные заказы больше нельзя оплатить, крипто-колонки не нужны.
+  -- Оплаченные заказы и покупки остаются как история продаж, поэтому CHECK по method и source не меняются.
+  DELETE FROM orders WHERE status = 'pending' AND method IN ('freekassa', 'xrocket');
+  DROP INDEX orders_external;
+  ALTER TABLE orders DROP COLUMN crypto_amount;
+  ALTER TABLE orders DROP COLUMN crypto_currency;
+  ALTER TABLE orders DROP COLUMN external_id;
+  ALTER TABLE orders DROP COLUMN pay_url;
+`,
+  },
 ];
 export function migrateSchema(db) {
   db.exec('BEGIN IMMEDIATE');
