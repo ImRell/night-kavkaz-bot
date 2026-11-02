@@ -72,6 +72,34 @@ export function welcomeScreen() {
     rows: [[button('Я согласен', 'accept_rules', { icon: 'check' })]],
   };
 }
+export function captchaScreen({ a, b, options, nonce }) {
+  const buttons = options.map((value) => button(String(value), `captcha:${nonce}:${value}`));
+  return {
+    parts: [
+      emoji('lock'),
+      ' ',
+      bold('Подтвердите, что вы не бот'),
+      '\n\n',
+      emoji('question'),
+      ' Сколько будет ',
+      bold(`${a} + ${b}`),
+      '?',
+    ],
+    rows: [buttons.slice(0, 2), buttons.slice(2)],
+  };
+}
+export function captchaLockedScreen(minutes) {
+  return {
+    parts: [
+      emoji('hourglass'),
+      ' ',
+      bold('Слишком много ошибок'),
+      '\n\n',
+      `Попробуйте снова примерно через ${minutes} мин.`,
+    ],
+    rows: [[button('Попробовать снова', 'captcha_retry', { icon: 'lightning' })]],
+  };
+}
 export function menuScreen(user = {}, isAdmin = false) {
   const name = user.first_name?.trim() || 'друг';
   return {

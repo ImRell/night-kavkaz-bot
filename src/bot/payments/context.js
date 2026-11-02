@@ -1,6 +1,5 @@
 import { answerCallback } from '../transport.js';
 import {
-  welcomeScreen,
   productsScreen,
   paymentMethodScreen,
   changedPriceText,
@@ -11,7 +10,7 @@ const ORDER_PAYLOAD = /^order:([1-9]\d{0,15})$/;
 export function createContext({
   store,
   transport,
-  rulesVersion,
+  gate,
   delivery,
   channels = {},
   methods = {},
@@ -19,13 +18,13 @@ export function createContext({
 }) {
   const agreed = (id) => {
     const record = store.get(id);
-    return record?.acceptedAt && record.rulesVersion === rulesVersion ? record : null;
+    return gate.isAllowed(record) ? record : null;
   };
   async function requireAgreement(ctx) {
     const record = agreed(ctx.from.id);
     if (record) return record;
-    await answerCallback(ctx, 'Сначала подтвердите возраст и согласие с правилами.');
-    await transport.show(ctx, welcomeScreen());
+    await answerCallback(ctx, gate.noticeFor(ctx.from.id));
+    await transport.show(ctx, gate.screenFor(ctx.from.id));
     return null;
   }
   const showProducts = (ctx) =>

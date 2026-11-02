@@ -1,5 +1,5 @@
 export async function runApplication(
-  { bot, broadcastQueue, webhookServer = null, delivery = null, logger = console },
+  { bot, broadcastQueue, webhookServer = null, delivery = null, backups = null, logger = console },
   store,
 ) {
   let shuttingDown = false;
@@ -44,6 +44,7 @@ export async function runApplication(
         broadcastQueue.start();
         // Purchases paid before a restart may still wait for their invite links.
         delivery?.retryPending().catch(() => {});
+        backups?.start();
       }
     });
   } catch (error) {
@@ -60,6 +61,7 @@ export async function runApplication(
     process.removeListener('SIGTERM', onSigterm);
     await broadcastQueue.stop();
     await webhookServer?.stop();
+    await backups?.stop();
     store.close();
     logger.info?.('Бот остановлен.');
   }

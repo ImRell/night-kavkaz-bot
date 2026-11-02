@@ -7,6 +7,8 @@ import { registerAdminHandlers } from './bot/admin.js';
 import { createTransport } from './bot/transport.js';
 import { createBroadcastQueue } from './bot/broadcast-queue.js';
 import { createDelivery } from './bot/delivery.js';
+import { createAccessGate } from './bot/access-gate.js';
+import { createBackups } from './bot/backup.js';
 import { createFreeKassa } from './integrations/freekassa.js';
 import { createXRocket } from './integrations/xrocket.js';
 import {
@@ -34,9 +36,17 @@ export function createApplication(config, store, { logger = createLogger() } = {
     channels: config.channels,
     logger,
   });
+  const gate = createAccessGate({ store, rulesVersion: config.rulesVersion });
+  const backups = createBackups({
+    store,
+    telegram: bot.telegram,
+    recipients: config.bootstrapAdminIds,
+    logger,
+  });
   registerHandlers(bot, {
     store,
     rulesVersion: config.rulesVersion,
+    gate,
     transport,
     channels: config.channels,
     logger,
@@ -44,7 +54,7 @@ export function createApplication(config, store, { logger = createLogger() } = {
   const { handleFreeKassa, handleXRocket } = registerPaymentHandlers(bot, {
     store,
     transport,
-    rulesVersion: config.rulesVersion,
+    gate,
     channels: config.channels,
     delivery,
     logger,
@@ -66,5 +76,5 @@ export function createApplication(config, store, { logger = createLogger() } = {
   const webhookServer = Object.keys(routes).length
     ? createWebhookServer({ http: config.http, routes, logger })
     : null;
-  return { bot, broadcastQueue, webhookServer, delivery, logger };
+  return { bot, broadcastQueue, webhookServer, delivery, backups, logger };
 }

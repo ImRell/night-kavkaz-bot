@@ -1,6 +1,12 @@
-import { welcomeScreen } from '../../ui/screens.js';
 import { answerCallback } from '../transport.js';
-export function createContext({ store, transport, rulesVersion, channels = {}, logger = console }) {
+export function createContext({
+  store,
+  transport,
+  rulesVersion,
+  gate,
+  channels = {},
+  logger = console,
+}) {
   const opensCatalogBelow = (ctx) => {
     if (ctx.callbackQuery?.data === 'discount_products') return true;
     const message = ctx.callbackQuery?.message;
@@ -17,24 +23,24 @@ export function createContext({ store, transport, rulesVersion, channels = {}, l
       )
     );
   };
-  const hasAgreement = (record) =>
-    Boolean(record?.acceptedAt && record.rulesVersion === rulesVersion);
+  const hasAgreement = gate.isAllowed;
   const purchasedProductIds = (userId) => store.listPurchasedProductIds?.(userId) ?? [];
   const hasPurchasedProduct = (userId, productId) =>
     store.hasPurchasedProduct?.(userId, productId) ?? false;
   async function requireAgreement(ctx, replyBelow = false) {
     const record = store.get(ctx.from.id);
     if (hasAgreement(record)) return record;
-    if (ctx.callbackQuery)
-      await answerCallback(ctx, 'Сначала подтвердите возраст и согласие с правилами.');
-    if (replyBelow || !ctx.callbackQuery) await transport.reply(ctx, welcomeScreen());
-    else await transport.show(ctx, welcomeScreen());
+    if (ctx.callbackQuery) await answerCallback(ctx, gate.noticeFor(ctx.from.id));
+    const screen = gate.screenFor(ctx.from.id);
+    if (replyBelow || !ctx.callbackQuery) await transport.reply(ctx, screen);
+    else await transport.show(ctx, screen);
     return null;
   }
   return {
     store,
     transport,
     rulesVersion,
+    gate,
     channels,
     logger,
     opensCatalogBelow,

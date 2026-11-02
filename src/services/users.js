@@ -3,6 +3,7 @@ const OPEN_ORDER_GRACE_MS = 24 * 60 * 60 * 1000;
 export function createUsersService(context) {
   const { db, clock } = context;
   const {
+    passCaptchaQuery,
     cleanupCandidatesQuery,
     removableUserQuery,
     recentOpenOrderQuery,
@@ -65,6 +66,9 @@ export function createUsersService(context) {
     },
     listBuyers(page = 0, pageSize = 5) {
       return pageUsers(true, page, pageSize);
+    },
+    passCaptcha(id) {
+      passCaptchaQuery.run(telegramId(id));
     },
     listCleanupCandidateIds() {
       return cleanupCandidatesQuery.all().map((row) => row.telegramId);

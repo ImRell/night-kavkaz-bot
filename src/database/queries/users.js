@@ -2,8 +2,11 @@ export function prepareUsersQueries(db) {
   const BUYER_CONDITION = `EXISTS (
         SELECT 1 FROM purchases WHERE purchases.telegram_id = users.telegram_id AND purchases.status = 'completed'
       )`;
+  const passCaptchaQuery = db.prepare(`UPDATE users
+      SET captcha_passed_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+      WHERE telegram_id = ? AND captcha_passed_at IS NULL`);
   const getUser = db.prepare(`SELECT telegram_id AS telegramId, accepted_at AS acceptedAt,
-      rules_version AS rulesVersion,
+      rules_version AS rulesVersion, captcha_passed_at AS captchaPassedAt,
       username, first_name AS firstName, last_name AS lastName, registered_at AS registeredAt,
       (SELECT count(*) FROM purchases WHERE purchases.telegram_id = users.telegram_id AND purchases.status = 'completed') AS purchaseCount,
       users.banned_at AS bannedAt
@@ -78,6 +81,7 @@ export function prepareUsersQueries(db) {
   const deleteUserOrdersQuery = db.prepare('DELETE FROM orders WHERE telegram_id = ?');
   const deleteUserQuery = db.prepare('DELETE FROM users WHERE telegram_id = ?');
   return {
+    passCaptchaQuery,
     cleanupCandidatesQuery,
     removableUserQuery,
     recentOpenOrderQuery,

@@ -297,6 +297,14 @@ const migrations = [
   ALTER TABLE purchases RENAME COLUMN source_v16 TO source;
 `,
   },
+  {
+    version: 17,
+    sql: `
+  -- Капча для новых пользователей. Те, кто уже принял правила, считаются прошедшими её.
+  ALTER TABLE users ADD COLUMN captcha_passed_at TEXT;
+  UPDATE users SET captcha_passed_at = accepted_at WHERE accepted_at IS NOT NULL;
+`,
+  },
 ];
 export function migrateSchema(db) {
   db.exec('BEGIN IMMEDIATE');
