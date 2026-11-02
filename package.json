@@ -4,8 +4,8 @@
   "private": true,
   "main": "src/index.js",
   "scripts": {
-    "start": "node .",
-    "dev": "nodemon --watch src --ext js --exec node .",
+    "start": "node --env-file=.env.production .",
+    "dev": "nodemon --watch src --ext js --exec \"node --env-file=.env.development .\"",
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
@@ -16,7 +16,6 @@
     "node": "^22.13.0 || >=24.0.0"
   },
   "dependencies": {
-    "dotenv": "^18.0.4",
     "telegraf": "^4.16.3"
   },
   "devDependencies": {

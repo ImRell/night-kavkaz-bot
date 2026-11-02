@@ -1,4 +1,3 @@
-import 'dotenv/config';
 import { createLogger, readLoggerConfig } from './logger.js';
 import { readConfig } from './config.js';
 import { createStore } from './store.js';
