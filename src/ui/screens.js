@@ -116,7 +116,7 @@ export function productBuyScreen(product) {
     rows: [[button('Купить', `buy:${product.id}`, { icon: 'check' })], ...back('products')],
   };
 }
-export function paymentMethodScreen(product, { freeKassa = false, xRocket = null } = {}) {
+export function paymentMethodScreen(product, { freeKassa = false, xRocket = false } = {}) {
   if (!product) return productScreen(undefined);
   const starsAvailable = isStarsAmount(product.price);
   const rows = [];
@@ -130,7 +130,7 @@ export function paymentMethodScreen(product, { freeKassa = false, xRocket = null
     ]);
   if (xRocket)
     rows.push([
-      button(`Криптовалюта (${xRocket})`, `buy_xr:${product.id}:${product.price}`, {
+      button('Криптовалюта (xRocket)', `buy_xr:${product.id}:${product.price}`, {
         icon: 'lightning',
       }),
     ]);
@@ -306,11 +306,11 @@ export function productsScreen({ items }, ownedProductIds = []) {
   else {
     for (const product of available) {
       parts.push(
-        '\n\n',
+        '\n\n  ',
         emoji('fire'),
         ' ',
         bold(product.title),
-        '\n',
+        '\n  ',
         emoji('diamond'),
         ' ',
         ...productPriceParts(product),
