@@ -3,7 +3,8 @@ import { answerCallback } from '../transport.js';
 import { isTopUpAmount, parseTopUpAmount } from '../top-up-options.js';
 const INPUT_TTL_MS = 10 * 60 * 1000;
 export function registerTopUpHandlers(bot, context) {
-  const { transport, requireAgreement, hasAgreement, store } = context;
+  const { transport, requireAgreement, hasAgreement, store, freeKassaEnabled } = context;
+  const methods = { freeKassa: freeKassaEnabled };
   const waitingAmount = new Map();
   bot.use(async (ctx, next) => {
     if (ctx.from && (ctx.callbackQuery || ctx.message?.text?.startsWith('/'))) {
@@ -14,7 +15,7 @@ export function registerTopUpHandlers(bot, context) {
         waitingAmount.delete(String(ctx.from.id));
         const record = store.get(ctx.from.id);
         if (!hasAgreement(record)) return requireAgreement(ctx);
-        return transport.reply(ctx, topUpScreen(record));
+        return transport.reply(ctx, topUpScreen(record, methods));
       }
       waitingAmount.delete(String(ctx.from.id));
     }
@@ -24,7 +25,7 @@ export function registerTopUpHandlers(bot, context) {
     const record = await requireAgreement(ctx);
     if (!record) return;
     await answerCallback(ctx);
-    await transport.show(ctx, topUpScreen(record));
+    await transport.show(ctx, topUpScreen(record, methods));
   });
   bot.action('top_up_custom', async (ctx) => {
     if (!(await requireAgreement(ctx))) return;
@@ -33,7 +34,7 @@ export function registerTopUpHandlers(bot, context) {
       if (createdAt + INPUT_TTL_MS < now) waitingAmount.delete(id);
     }
     await answerCallback(ctx);
-    await transport.show(ctx, customTopUpScreen());
+    await transport.show(ctx, customTopUpScreen(false, methods));
     waitingAmount.set(String(ctx.from.id), now);
   });
   bot.action(/^top_up_amount:(\d{1,9})$/, async (ctx) => {
@@ -42,11 +43,11 @@ export function registerTopUpHandlers(bot, context) {
     const amount = Number(ctx.match[1]);
     if (!isTopUpAmount(amount)) {
       await answerCallback(ctx, 'Эта сумма недоступна. Выберите сумму или введите свою.');
-      await transport.show(ctx, topUpScreen(record));
+      await transport.show(ctx, topUpScreen(record, methods));
       return;
     }
     await answerCallback(ctx);
-    await transport.show(ctx, topUpMethodScreen(record, amount));
+    await transport.show(ctx, topUpMethodScreen(record, amount, methods));
   });
   // Old messages must not allow bank transfers or receipt approval.
   bot.action(
@@ -56,10 +57,10 @@ export function registerTopUpHandlers(bot, context) {
       if (!record) return;
       await answerCallback(
         ctx,
-        'Этот раздел отключён. Пополнение доступно только через Telegram Stars.',
+        'Этот раздел отключён. Пополните баланс через раздел «Пополнить баланс».',
         { show_alert: true },
       );
-      await transport.reply(ctx, topUpScreen(record));
+      await transport.reply(ctx, topUpScreen(record, methods));
     },
   );
   bot.on('text', async (ctx, next) => {
@@ -79,8 +80,8 @@ export function registerTopUpHandlers(bot, context) {
       return requireAgreement(ctx);
     }
     const amount = parseTopUpAmount(ctx.message.text);
-    if (amount === null) return transport.reply(ctx, customTopUpScreen(true));
+    if (amount === null) return transport.reply(ctx, customTopUpScreen(true, methods));
     waitingAmount.delete(id);
-    await transport.reply(ctx, topUpMethodScreen(record, amount));
+    await transport.reply(ctx, topUpMethodScreen(record, amount, methods));
   });
 }

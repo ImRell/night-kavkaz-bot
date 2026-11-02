@@ -147,7 +147,11 @@ export function profileScreen(user, record) {
     ],
   };
 }
-export function topUpScreen(record) {
+const paymentMethodsNote = (freeKassa) =>
+  freeKassa
+    ? 'Оплата через Telegram Stars или картой / СБП.'
+    : 'Оплата только через Telegram Stars.';
+export function topUpScreen(record, { freeKassa = false } = {}) {
   const amounts = TOP_UP_AMOUNTS.map((amount) => button(`${amount}₽`, `top_up_amount:${amount}`));
   return {
     parts: [
@@ -158,7 +162,7 @@ export function topUpScreen(record) {
       emoji('question'),
       ' На какую сумму пополнить баланс?\n\n',
       emoji('bullet'),
-      ' Оплата только через Telegram Stars.',
+      ` ${paymentMethodsNote(freeKassa)}`,
     ],
     rows: [
       amounts.slice(0, 2),
@@ -169,7 +173,7 @@ export function topUpScreen(record) {
     ],
   };
 }
-export function topUpMethodScreen(record, amount) {
+export function topUpMethodScreen(record, amount, { freeKassa = false } = {}) {
   if (!isTopUpAmount(amount)) throw new TypeError('Недоступная сумма пополнения.');
   const stars = starsForRub(amount);
   return {
@@ -185,15 +189,20 @@ export function topUpMethodScreen(record, amount) {
       emoji('diamond'),
       ` Текущий баланс: ${money(record.balance)}\n\n`,
       emoji('question'),
-      ' Оплата только через Telegram Stars. Подтвердите сумму:',
+      freeKassa
+        ? ' Выберите способ оплаты:'
+        : ' Оплата только через Telegram Stars. Подтвердите сумму:',
     ],
     rows: [
       [button(`Telegram Stars (${stars} ⭐)`, `top_up_stars:${amount}`, { icon: 'star' })],
+      ...(freeKassa
+        ? [[button(`Карта / СБП (${money(amount)})`, `top_up_fk:${amount}`, { icon: 'diamond' })]]
+        : []),
       ...back('top_up'),
     ],
   };
 }
-export function customTopUpScreen(invalid = false) {
+export function customTopUpScreen(invalid = false, { freeKassa = false } = {}) {
   return {
     parts: [
       emoji('star'),
@@ -202,7 +211,7 @@ export function customTopUpScreen(invalid = false) {
       '\n\n',
       ...(invalid ? ['Некорректная сумма. ', '\n\n'] : []),
       `Отправьте целое число от ${MIN_TOP_UP_AMOUNT} до ${MAX_TOP_UP_AMOUNT} — сумму пополнения в рублях, без копеек и обозначения валюты.\n\n`,
-      `Оплата только через Telegram Stars: 1 ⭐ = ${String(RUB_PER_STAR).replace('.', ',')} ₽. Количество звёзд округляется вверх.\n\n`,
+      `${paymentMethodsNote(freeKassa)} Курс Stars: 1 ⭐ = ${String(RUB_PER_STAR).replace('.', ',')} ₽, количество звёзд округляется вверх.\n\n`,
       'Например: 500. Для отмены нажмите кнопку ниже или отправьте /cancel.',
     ],
     rows: [[button('Отмена', 'top_up', { icon: 'cancel' })]],
@@ -232,6 +241,44 @@ export function starsCreditedScreen(result) {
       ' Зачислено: ',
       bold(money(result.amount)),
       ` (${result.stars} ⭐)\n`,
+      emoji('diamond'),
+      ' Текущий баланс: ',
+      bold(money(result.balance)),
+    ],
+    rows: [
+      [button('Товары', 'products', { icon: 'cart' })],
+      [button('Профиль', 'profile', { icon: 'profile' })],
+    ],
+  };
+}
+export function freeKassaInvoiceScreen(amount, url) {
+  return {
+    parts: [
+      emoji('diamond'),
+      ' ',
+      bold('Ссылка на оплату готова'),
+      '\n\n',
+      emoji('bullet'),
+      ' Сумма: ',
+      bold(money(amount)),
+      '\n\n',
+      'Нажмите «Оплатить» и выберите удобный способ на странице FreeKassa. ',
+      'Баланс пополнится автоматически, бот пришлёт уведомление.',
+    ],
+    rows: [[urlButton('Оплатить', url, { icon: 'link' })], ...back(`top_up_amount:${amount}`)],
+  };
+}
+export function freeKassaCreditedScreen(result) {
+  return {
+    parts: [
+      emoji('check'),
+      ' ',
+      bold('Баланс пополнен!'),
+      '\n\n',
+      emoji('bullet'),
+      ' Зачислено: ',
+      bold(money(result.amount)),
+      '\n',
       emoji('diamond'),
       ' Текущий баланс: ',
       bold(money(result.balance)),

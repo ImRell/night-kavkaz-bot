@@ -11,6 +11,7 @@ import { createBalanceService } from './services/balance.js';
 import { createCatalogService } from './services/catalog.js';
 import { createPurchasesService } from './services/purchases.js';
 import { createTopUpsService } from './services/top-ups.js';
+import { createFreeKassaService } from './services/freekassa.js';
 export async function createStore(
   file,
   { legacyPath, bootstrapAdminIds = [], clock = Date.now } = {},
@@ -38,6 +39,7 @@ export async function createStore(
       ...createBalanceService(context),
       ...createCatalogService(context),
       ...createTopUpsService(context),
+      ...createFreeKassaService(context),
       ...purchases,
       close() {
         if (!closed) {

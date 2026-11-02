@@ -6,6 +6,7 @@ import { preparePurchasesQueries } from './purchases.js';
 import { prepareDiscountsQueries } from './discounts.js';
 import { prepareTopUpsQueries } from './top-ups.js';
 import { prepareMaintenanceQueries } from './maintenance.js';
+import { prepareFreeKassaQueries } from './freekassa.js';
 export function prepareQueries(db) {
   return {
     ...prepareCatalogQueries(db),
@@ -16,5 +17,6 @@ export function prepareQueries(db) {
     ...prepareDiscountsQueries(db),
     ...prepareTopUpsQueries(db),
     ...prepareMaintenanceQueries(db),
+    ...prepareFreeKassaQueries(db),
   };
 }

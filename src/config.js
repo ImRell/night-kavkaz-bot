@@ -19,6 +19,49 @@ function readChannels(env) {
   }
   return Object.freeze(channels);
 }
+// Official FreeKassa notification servers.
+export const FREEKASSA_IPS = Object.freeze([
+  '168.119.157.136',
+  '168.119.60.227',
+  '178.154.197.79',
+  '51.250.54.238',
+]);
+function readPort(value, name) {
+  const port = Number(value);
+  if (!Number.isSafeInteger(port) || port < 1 || port > 65535)
+    throw new Error(`${name} должен быть портом от 1 до 65535.`);
+  return port;
+}
+function readFreeKassa(env) {
+  const merchantId = env.FREEKASSA_MERCHANT_ID?.trim();
+  if (!merchantId) return null;
+  if (!/^[1-9]\d{0,15}$/.test(merchantId))
+    throw new Error('FREEKASSA_MERCHANT_ID должен быть числовым ID магазина.');
+  const secret1 = env.FREEKASSA_SECRET_1 ?? '';
+  const secret2 = env.FREEKASSA_SECRET_2 ?? '';
+  if (!secret1 || !secret2)
+    throw new Error('Укажите FREEKASSA_SECRET_1 и FREEKASSA_SECRET_2 в .env.');
+  const rawIps = env.FREEKASSA_ALLOWED_IPS?.trim();
+  const allowedIps = rawIps
+    ? rawIps
+        .split(',')
+        .map((ip) => ip.trim())
+        .filter(Boolean)
+    : FREEKASSA_IPS;
+  const trustProxy = env.HTTP_TRUST_PROXY?.trim().toLowerCase() || 'false';
+  if (!['true', 'false'].includes(trustProxy)) throw new Error('HTTP_TRUST_PROXY: true или false.');
+  return Object.freeze({
+    merchantId,
+    secret1,
+    secret2,
+    allowedIps: Object.freeze([...new Set(allowedIps)]),
+    http: Object.freeze({
+      host: env.HTTP_HOST?.trim() || '127.0.0.1',
+      port: readPort(env.HTTP_PORT?.trim() || '3000', 'HTTP_PORT'),
+      trustProxy: trustProxy === 'true',
+    }),
+  });
+}
 export function readConfig(env = process.env) {
   const token = env.BOT_TOKEN?.trim();
   if (!token || token === 'your_telegram_bot_token_here')
@@ -36,5 +79,6 @@ export function readConfig(env = process.env) {
     rulesVersion: 1,
     bootstrapAdminIds: [...new Set(bootstrapAdminIds)],
     channels: readChannels(env),
+    freeKassa: readFreeKassa(env),
   };
 }

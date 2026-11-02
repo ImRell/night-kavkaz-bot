@@ -209,6 +209,24 @@ const migrations = [
   CREATE TABLE broadcast_meta (key TEXT PRIMARY KEY, value INTEGER NOT NULL);
 `,
   },
+  {
+    version: 14,
+    sql: `
+  -- Заказы FreeKassa: отдельная таблица, чтобы не пересобирать top_ups ради CHECK по method.
+  CREATE TABLE freekassa_orders (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id TEXT NOT NULL REFERENCES users(telegram_id) ON DELETE RESTRICT,
+    amount INTEGER NOT NULL CHECK (typeof(amount) = 'integer' AND amount > 0),
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid')),
+    operation_id TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    paid_at TEXT
+  );
+  CREATE UNIQUE INDEX freekassa_orders_operation ON freekassa_orders(operation_id)
+    WHERE operation_id IS NOT NULL;
+  CREATE INDEX freekassa_orders_user ON freekassa_orders(telegram_id, status, id);
+`,
+  },
 ];
 export function migrateSchema(db) {
   db.exec('BEGIN IMMEDIATE');
