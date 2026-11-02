@@ -3,7 +3,11 @@ import {
   adminAdminsScreen,
   adminUsersScreen,
   adminGrantResultScreen,
+  adminCleanupConfirmScreen,
+  adminCleanupProgressScreen,
+  adminCleanupResultScreen,
 } from '../../ui/admin/screens.js';
+import { createUserCleanup } from './cleanup.js';
 export function createDirectoryTools(context) {
   const { store, transport, inputs, admin, deny } = context;
   async function showAdmins(ctx, page = 0) {
@@ -162,6 +166,29 @@ export function registerUsersHandlers(bot, context) {
       'Отправьте Telegram ID или username (с @ или без него).',
       { cancelData: USERS_CANCEL },
     );
+  });
+  const cleanup = createUserCleanup({ store, logger });
+  bot.action('admin_users_cleanup', async (ctx) => {
+    if (!admin(ctx)) return deny(ctx);
+    inputs.delete(String(ctx.from.id));
+    await answerCallback(ctx);
+    await transport.show(ctx, adminCleanupConfirmScreen(store.listCleanupCandidateIds().length));
+  });
+  bot.action('admin_users_cleanup_run', async (ctx) => {
+    if (!admin(ctx)) return deny(ctx);
+    if (cleanup.isRunning())
+      return answerCallback(ctx, 'Очистка уже идёт, дождитесь итога.', { show_alert: true });
+    await answerCallback(ctx);
+    const count = store.listCleanupCandidateIds().length;
+    const logFailure = (error) =>
+      logger.error('Ошибка очистки пользователей.', { code: error.code ?? error.name });
+    const finished = cleanup.run(ctx.telegram).catch(logFailure);
+    await transport.show(ctx, adminCleanupProgressScreen(count));
+    // Not awaited: a long check must not hold this update past Telegraf's handler timeout.
+    // Chained after the progress screen so a quick result is never overwritten by it.
+    finished
+      .then((result) => result && transport.show(ctx, adminCleanupResultScreen(result)))
+      .catch(logFailure);
   });
   bot.action(['admin_grant', 'admin_credit'], async (ctx) => {
     if (!admin(ctx)) return deny(ctx);

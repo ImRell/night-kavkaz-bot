@@ -113,6 +113,7 @@ export function adminUsersScreen(
       button('Забанить', 'admin_ban', { icon: 'cancel', style: 'danger' }),
       button('Разбанить', 'admin_unban', { icon: 'check' }),
     ],
+    [button('Очистить заблокировавших', 'admin_users_cleanup', { icon: 'warning' })],
   );
   rows.push(
     [
@@ -233,6 +234,68 @@ export function adminLookupScreen(user, query) {
     );
   }
   return { parts, rows: usersBackRow() };
+}
+export function adminCleanupConfirmScreen(count) {
+  if (!count)
+    return {
+      parts: [
+        emoji('check'),
+        ' Проверять некого: все пользователи — покупатели, админы или забаненные.',
+      ],
+      rows: usersBackRow(),
+    };
+  return {
+    parts: [
+      emoji('warning'),
+      ' ',
+      bold('Очистка заблокировавших'),
+      '\n\n',
+      `Проверю пользователей без покупок: ${count}. Те, кто заблокировал бота или удалил аккаунт, будут удалены из базы без возможности восстановления.\n\n`,
+      'Покупатели, администраторы и забаненные не затрагиваются. Пользователи ничего не увидят.',
+    ],
+    rows: [
+      [
+        button('Проверить и удалить', 'admin_users_cleanup_run', {
+          icon: 'check',
+          style: 'danger',
+        }),
+      ],
+      [button('Отмена', 'admin_users', { icon: 'cancel' })],
+    ],
+  };
+}
+export function adminCleanupProgressScreen(count) {
+  return {
+    parts: [
+      emoji('hourglass'),
+      ' ',
+      bold('Проверка запущена'),
+      '\n\n',
+      `Пользователей к проверке: ${count}. Когда закончу, здесь появится итог.`,
+    ],
+    rows: [],
+  };
+}
+export function adminCleanupResultScreen({ checked, removed, kept, failed }) {
+  return {
+    parts: [
+      emoji('check'),
+      ' ',
+      bold('Очистка завершена'),
+      '\n\n',
+      emoji('bullet'),
+      ` Проверено: ${checked}\n`,
+      emoji('bullet'),
+      ` Удалено: ${removed}\n`,
+      ...(kept
+        ? [emoji('bullet'), ` Оставлено из-за открытого заказа или новой покупки: ${kept}\n`]
+        : []),
+      ...(failed
+        ? [emoji('warning'), ` Не удалось проверить: ${failed}. Они не удалены, повторите позже.\n`]
+        : []),
+    ],
+    rows: usersBackRow(),
+  };
 }
 export function adminGrantProductsScreen(user, query, products, ownedProductIds = []) {
   if (!user)

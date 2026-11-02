@@ -67,7 +67,25 @@ export function prepareUsersQueries(db) {
       WHERE telegram_id = ? AND banned_at IS NULL`);
   const unbanUserQuery = db.prepare(`UPDATE users SET banned_at = NULL, banned_by = NULL
       WHERE telegram_id = ? AND banned_at IS NOT NULL`);
+  const REMOVABLE_CONDITION = `users.banned_at IS NULL
+      AND NOT EXISTS (SELECT 1 FROM admins WHERE admins.telegram_id = users.telegram_id)
+      AND NOT EXISTS (SELECT 1 FROM purchases WHERE purchases.telegram_id = users.telegram_id)`;
+  const cleanupCandidatesQuery = db.prepare(`SELECT telegram_id AS telegramId FROM users
+      WHERE ${REMOVABLE_CONDITION} ORDER BY telegram_id`);
+  const removableUserQuery = db.prepare(
+    `SELECT telegram_id AS telegramId FROM users WHERE telegram_id = ? AND ${REMOVABLE_CONDITION}`,
+  );
+  // A blocked user can still pay through an already opened payment link.
+  const recentOpenOrderQuery = db.prepare(`SELECT 1 AS yes FROM orders
+      WHERE telegram_id = ? AND status = 'pending' AND created_at > ? LIMIT 1`);
+  const deleteUserOrdersQuery = db.prepare('DELETE FROM orders WHERE telegram_id = ?');
+  const deleteUserQuery = db.prepare('DELETE FROM users WHERE telegram_id = ?');
   return {
+    cleanupCandidatesQuery,
+    removableUserQuery,
+    recentOpenOrderQuery,
+    deleteUserOrdersQuery,
+    deleteUserQuery,
     getUser,
     accept,
     adminCountQuery,

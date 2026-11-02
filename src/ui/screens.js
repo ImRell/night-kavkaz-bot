@@ -306,27 +306,20 @@ export function productsScreen({ items }, ownedProductIds = []) {
   else {
     for (const product of available) {
       parts.push(
-        '\n\n  ',
+        '\n\n',
         emoji('fire'),
         ' ',
         bold(product.title),
-        '\n  ',
+        '\n',
         emoji('diamond'),
-        ' ',
+        ' Цена: ',
         ...productPriceParts(product),
         ...(product.discountPercent ? [` (−${product.discountPercent}%)`] : []),
       );
-      const price = money(product.price, product.currency);
       const title = [...String(product.title).trim()];
-      const titleBudget = Math.max(1, 64 - [...price].length - 3);
-      const labelTitle =
-        title.length > titleBudget
-          ? `${title
-              .slice(0, Math.max(1, titleBudget - 1))
-              .join('')
-              .trimEnd()}…`
-          : title.join('');
-      rows.push([button(`${labelTitle} · ${price}`, `product:${product.id}`, { icon: 'cart' })]);
+      const label =
+        title.length > 64 ? `${title.slice(0, 63).join('').trimEnd()}…` : title.join('');
+      rows.push([button(label, `product:${product.id}`, { icon: 'cart' })]);
     }
   }
   rows.push(...back('main_menu'));

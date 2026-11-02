@@ -1,6 +1,13 @@
 import { telegramId } from '../domain/telegram-id.js';
+const OPEN_ORDER_GRACE_MS = 24 * 60 * 60 * 1000;
 export function createUsersService(context) {
+  const { db, clock } = context;
   const {
+    cleanupCandidatesQuery,
+    removableUserQuery,
+    recentOpenOrderQuery,
+    deleteUserOrdersQuery,
+    deleteUserQuery,
     getUser,
     accept,
     userCountQuery,
@@ -65,6 +72,32 @@ export function createUsersService(context) {
     },
     listBuyers(page = 0, pageSize = 5) {
       return pageUsers(true, page, pageSize);
+    },
+    listCleanupCandidateIds() {
+      return cleanupCandidatesQuery.all().map((row) => row.telegramId);
+    },
+    // Buyers, admins and banned users always stay: their records still matter after a block.
+    removeBlockedUser(id) {
+      const user = telegramId(id);
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        if (!removableUserQuery.get(user)) {
+          db.exec('COMMIT');
+          return { status: 'kept' };
+        }
+        const orderCutoff = new Date(clock() - OPEN_ORDER_GRACE_MS).toISOString();
+        if (recentOpenOrderQuery.get(user, orderCutoff)) {
+          db.exec('COMMIT');
+          return { status: 'kept_open_order' };
+        }
+        deleteUserOrdersQuery.run(user);
+        deleteUserQuery.run(user);
+        db.exec('COMMIT');
+        return { status: 'removed' };
+      } catch (error) {
+        db.exec('ROLLBACK');
+        throw error;
+      }
     },
     updateUserProfile(user) {
       const id = telegramId(user?.id);
