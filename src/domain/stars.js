@@ -1,4 +1,4 @@
-export const RUB_PER_STAR = 1.3;
+export const RUB_PER_STAR = 1.5;
 // Telegram caps a single Stars invoice, so expensive products are paid by card only.
 export const MAX_STARS_AMOUNT = 13000;
 export function isStarsAmount(amount) {

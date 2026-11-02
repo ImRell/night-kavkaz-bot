@@ -56,7 +56,9 @@ export function createOrdersService(context) {
         const stars = method === 'stars' ? starsForRub(product.price) : null;
         // Crypto invoices use the current rate and expire, so each tap gets a fresh order.
         const open =
-          method === 'xrocket' ? null : findOpenOrder.get(user, product.id, method, product.price);
+          method === 'xrocket'
+            ? null
+            : findOpenOrder.get(user, product.id, method, product.price, stars);
         const orderId = open
           ? open.id
           : Number(

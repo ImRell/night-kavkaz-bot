@@ -1,6 +1,7 @@
 export function prepareOrdersQueries(db) {
   const findOpenOrder = db.prepare(`SELECT id FROM orders
-      WHERE telegram_id = ? AND product_id = ? AND method = ? AND amount = ? AND status = 'pending'
+      WHERE telegram_id = ? AND product_id = ? AND method = ? AND amount = ? AND stars IS ?
+        AND status = 'pending'
       ORDER BY id DESC LIMIT 1`);
   const insertOrder = db.prepare(`INSERT INTO orders
       (telegram_id, product_id, product_title, amount, method, stars) VALUES (?, ?, ?, ?, ?, ?)`);
