@@ -116,7 +116,7 @@ export function productBuyScreen(product) {
     rows: [[button('Купить', `buy:${product.id}`, { icon: 'check' })], ...back('products')],
   };
 }
-export function paymentMethodScreen(product, { freeKassa = false } = {}) {
+export function paymentMethodScreen(product, { freeKassa = false, xRocket = null } = {}) {
   if (!product) return productScreen(undefined);
   const starsAvailable = isStarsAmount(product.price);
   const rows = [];
@@ -127,6 +127,12 @@ export function paymentMethodScreen(product, { freeKassa = false } = {}) {
         `buy_fk:${product.id}:${product.price}`,
         { icon: 'diamond' },
       ),
+    ]);
+  if (xRocket)
+    rows.push([
+      button(`Криптовалюта (${xRocket})`, `buy_xr:${product.id}:${product.price}`, {
+        icon: 'lightning',
+      }),
     ]);
   if (starsAvailable)
     rows.push([
@@ -184,6 +190,29 @@ export function freeKassaInvoiceScreen(order, url) {
       'Ссылка на канал придёт в этот чат автоматически после оплаты.',
     ],
     rows: [[urlButton('Оплатить', url, { icon: 'link' })], ...back(`buy:${order.productId}`)],
+  };
+}
+export function cryptoInvoiceScreen(order, invoice) {
+  return {
+    parts: [
+      emoji('lightning'),
+      ' ',
+      bold('Счёт на оплату готов'),
+      '\n\n',
+      emoji('bullet'),
+      ` Товар: ${order.productTitle}\n`,
+      emoji('bullet'),
+      ' Сумма: ',
+      bold(`${invoice.cryptoAmount} ${invoice.cryptoCurrency}`),
+      ` (${money(order.amount)})\n\n`,
+      'Нажмите «Оплатить» — откроется счёт в @xRocket. Оплатить можно с баланса xRocket ',
+      'или пополнив его в удобной сети. Счёт действует 1 час, ',
+      'ссылка на канал придёт в этот чат автоматически после оплаты.',
+    ],
+    rows: [
+      [urlButton('Оплатить', invoice.payUrl, { icon: 'link' })],
+      ...back(`buy:${order.productId}`),
+    ],
   };
 }
 export function deliveryDelayedScreen(purchase) {
@@ -278,8 +307,12 @@ export function productsScreen({ items }, ownedProductIds = []) {
     for (const product of available) {
       parts.push(
         '\n\n',
+        emoji('fire'),
+        ' ',
         bold(product.title),
         '\n',
+        emoji('diamond'),
+        ' ',
         ...productPriceParts(product),
         ...(product.discountPercent ? [` (−${product.discountPercent}%)`] : []),
       );

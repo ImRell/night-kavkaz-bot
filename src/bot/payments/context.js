@@ -14,7 +14,7 @@ export function createContext({
   rulesVersion,
   delivery,
   channels = {},
-  freeKassaEnabled = false,
+  methods = {},
   logger = console,
 }) {
   const agreed = (id) => {
@@ -34,10 +34,7 @@ export function createContext({
       productsScreen(store.listProducts(), store.listPurchasedProductIds(ctx.from.id)),
     );
   const showMethods = (ctx, productId) =>
-    transport.show(
-      ctx,
-      paymentMethodScreen(store.getProduct(productId), { freeKassa: freeKassaEnabled }),
-    );
+    transport.show(ctx, paymentMethodScreen(store.getProduct(productId), methods));
   // Shared "Buy" step for every payment method: validates the product and opens an order.
   async function openOrder(ctx, method) {
     if (!(await requireAgreement(ctx))) return null;
@@ -132,7 +129,7 @@ export function createContext({
     transport,
     logger,
     delivery,
-    freeKassaEnabled,
+    methods,
     agreed,
     requireAgreement,
     showProducts,

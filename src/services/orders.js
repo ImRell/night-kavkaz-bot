@@ -1,6 +1,8 @@
 import { telegramId } from '../domain/telegram-id.js';
 import { isStarsAmount, starsForRub } from '../domain/stars.js';
-const METHODS = new Set(['stars', 'freekassa']);
+const METHODS = new Set(['stars', 'freekassa', 'xrocket']);
+// Crypto amounts travel as decimal strings ("3.71" vs "3.710000000"), so compare them numerically.
+const sameDecimal = (a, b) => Math.round(Number(a) * 1e9) === Math.round(Number(b) * 1e9);
 export function createOrdersService(context) {
   const { db, applyDiscount } = context;
   const {
@@ -10,6 +12,7 @@ export function createOrdersService(context) {
     findOpenOrder,
     insertOrder,
     getOrderQuery,
+    attachInvoiceQuery,
     markOrderQuery,
     insertPurchase,
   } = context.queries;
@@ -51,7 +54,9 @@ export function createOrdersService(context) {
           return { status: 'method_unavailable', productId: product.id };
         }
         const stars = method === 'stars' ? starsForRub(product.price) : null;
-        const open = findOpenOrder.get(user, product.id, method, product.price);
+        // Crypto invoices use the current rate and expire, so each tap gets a fresh order.
+        const open =
+          method === 'xrocket' ? null : findOpenOrder.get(user, product.id, method, product.price);
         const orderId = open
           ? open.id
           : Number(
@@ -80,8 +85,22 @@ export function createOrdersService(context) {
         owned: Boolean(findUserProductPurchase.get(order.telegramId, order.productId)),
       };
     },
+    attachOrderInvoice(orderId, { cryptoAmount, cryptoCurrency, externalId, payUrl }) {
+      orderIdOf(orderId);
+      if (
+        ![cryptoAmount, cryptoCurrency, externalId, payUrl].every((v) => typeof v === 'string' && v)
+      )
+        throw new TypeError('Некорректные данные счёта.');
+      return (
+        attachInvoiceQuery.run(cryptoAmount, cryptoCurrency, externalId, payUrl, orderId)
+          .changes === 1
+      );
+    },
     // Idempotent per payment: payment providers may deliver the same confirmation several times.
-    payOrder(orderId, { method, paymentId, amount = null, stars = null }) {
+    payOrder(
+      orderId,
+      { method, paymentId, amount = null, stars = null, externalId = null, cryptoAmount = null },
+    ) {
       orderIdOf(orderId);
       if (!METHODS.has(method)) throw new TypeError('Некорректный способ оплаты.');
       if (typeof paymentId !== 'string' || !paymentId || paymentId.length > 256)
@@ -112,7 +131,10 @@ export function createOrdersService(context) {
         }
         if (
           (amount !== null && amount !== order.amount) ||
-          (stars !== null && stars !== order.stars)
+          (stars !== null && stars !== order.stars) ||
+          (externalId !== null && externalId !== order.externalId) ||
+          (cryptoAmount !== null &&
+            (!order.cryptoAmount || !sameDecimal(cryptoAmount, order.cryptoAmount)))
         ) {
           db.exec('COMMIT');
           return { ...base, status: 'amount_mismatch' };

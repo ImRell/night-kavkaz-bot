@@ -4,6 +4,7 @@ import { URLSearchParams } from 'node:url';
 const MAX_BODY_BYTES = 16 * 1024;
 const REQUEST_TIMEOUT_MS = 10_000;
 export const FREEKASSA_NOTIFY_PATH = '/freekassa/notify';
+export const XROCKET_NOTIFY_PATH = '/xrocket/notify';
 function send(res, status, body) {
   res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8' });
   res.end(body);
@@ -41,24 +42,51 @@ function clientIp(req, trustProxy) {
   }
   return socketIp;
 }
-export function createWebhookServer({ http, allowedIps, freeKassa, handleFreeKassa, logger }) {
+export function freeKassaRoute({ allowedIps, freeKassa, handle, logger }) {
   const allowed = new Set(allowedIps);
-  async function route(req, res) {
-    const { pathname } = new URL(req.url, 'http://localhost');
-    if (pathname !== FREEKASSA_NOTIFY_PATH) return send(res, 404, 'Not found');
-    if (req.method !== 'POST') return send(res, 405, 'Method not allowed');
-    const ip = clientIp(req, http.trustProxy);
+  return async (req, { ip }) => {
     if (!allowed.has(ip)) {
       logger.warn('Оповещение FreeKassa с неразрешённого IP.', { ip });
-      return send(res, 403, 'Forbidden');
+      return [403, 'Forbidden'];
     }
     const notification = freeKassa.parseNotification(new URLSearchParams(await readBody(req)));
     if (notification.error) {
       logger.warn('Отклонено оповещение FreeKassa.', { code: notification.error, ip });
-      return send(res, 400, notification.error);
+      return [400, notification.error];
     }
-    const accepted = await handleFreeKassa(notification);
-    return accepted ? send(res, 200, 'YES') : send(res, 400, 'rejected');
+    return (await handle(notification)) ? [200, 'YES'] : [400, 'rejected'];
+  };
+}
+// xRocket pauses ALL app webhooks after repeated failures, so anything with a valid signature
+// is acknowledged with 200; problems are logged for manual review instead of being retried.
+export function xRocketRoute({ xRocket, handle, logger }) {
+  return async (req, { ip }) => {
+    const rawBody = await readBody(req);
+    if (!xRocket.verifySignature(req.headers, rawBody)) {
+      logger.warn('Отклонён вебхук xRocket: неверная подпись.', { ip });
+      return [401, 'invalid signature'];
+    }
+    let event;
+    try {
+      event = JSON.parse(rawBody);
+    } catch {
+      logger.error('Вебхук xRocket с некорректным JSON.');
+      return [200, 'ok'];
+    }
+    const paid = xRocket.parseWebhook(event);
+    if (paid.error) logger.error('Отклонён вебхук xRocket.', { code: paid.error });
+    else if (!paid.ignore) await handle(paid);
+    return [200, 'ok'];
+  };
+}
+export function createWebhookServer({ http, routes, logger }) {
+  async function route(req, res) {
+    const { pathname } = new URL(req.url, 'http://localhost');
+    const handler = routes[pathname];
+    if (!handler) return send(res, 404, 'Not found');
+    if (req.method !== 'POST') return send(res, 405, 'Method not allowed');
+    const [status, body] = await handler(req, { ip: clientIp(req, http.trustProxy) });
+    return send(res, status, body);
   }
   const server = createServer((req, res) => {
     route(req, res).catch((error) => {
@@ -75,9 +103,8 @@ export function createWebhookServer({ http, allowedIps, freeKassa, handleFreeKas
         server.once('error', reject);
         server.listen(http.port, http.host, () => {
           server.off('error', reject);
-          logger.info(
-            `Вебхук FreeKassa слушает http://${http.host}:${http.port}${FREEKASSA_NOTIFY_PATH}`,
-          );
+          for (const path of Object.keys(routes))
+            logger.info(`Вебхук слушает http://${http.host}:${http.port}${path}`);
           resolve();
         });
       }),

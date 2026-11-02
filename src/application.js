@@ -8,7 +8,14 @@ import { createTransport } from './bot/transport.js';
 import { createBroadcastQueue } from './bot/broadcast-queue.js';
 import { createDelivery } from './bot/delivery.js';
 import { createFreeKassa } from './integrations/freekassa.js';
-import { createWebhookServer } from './http/server.js';
+import { createXRocket } from './integrations/xrocket.js';
+import {
+  createWebhookServer,
+  freeKassaRoute,
+  xRocketRoute,
+  FREEKASSA_NOTIFY_PATH,
+  XROCKET_NOTIFY_PATH,
+} from './http/server.js';
 export function createApplication(config, store, { logger = createLogger() } = {}) {
   const bot = new Telegraf(config.token);
   const transport = createTransport({ logger });
@@ -18,7 +25,9 @@ export function createApplication(config, store, { logger = createLogger() } = {
       logger.warn(`Не указан ${name}: покупка этого товара будет недоступна.`);
   }
   const freeKassa = config.freeKassa ? createFreeKassa(config.freeKassa) : null;
-  if (!freeKassa) logger.warn('FreeKassa не настроена: доступна только оплата через Stars.');
+  if (!freeKassa) logger.warn('FreeKassa не настроена: оплата картой недоступна.');
+  const xRocket = config.xRocket ? createXRocket(config.xRocket) : null;
+  if (!xRocket) logger.warn('xRocket не настроен: оплата криптовалютой недоступна.');
   const delivery = createDelivery({
     store,
     telegram: bot.telegram,
@@ -34,7 +43,7 @@ export function createApplication(config, store, { logger = createLogger() } = {
     hooks,
     logger,
   });
-  const { handleFreeKassa } = registerPaymentHandlers(bot, {
+  const { handleFreeKassa, handleXRocket } = registerPaymentHandlers(bot, {
     store,
     transport,
     rulesVersion: config.rulesVersion,
@@ -42,17 +51,22 @@ export function createApplication(config, store, { logger = createLogger() } = {
     delivery,
     logger,
     freeKassa,
+    xRocket,
   });
   const broadcastQueue = createBroadcastQueue({ store, telegram: bot.telegram, transport, logger });
   registerAdminHandlers(bot, { store, transport, broadcastQueue, delivery, logger });
-  const webhookServer = freeKassa
-    ? createWebhookServer({
-        http: config.freeKassa.http,
-        allowedIps: config.freeKassa.allowedIps,
-        freeKassa,
-        handleFreeKassa,
-        logger,
-      })
+  const routes = {};
+  if (freeKassa)
+    routes[FREEKASSA_NOTIFY_PATH] = freeKassaRoute({
+      allowedIps: config.freeKassa.allowedIps,
+      freeKassa,
+      handle: handleFreeKassa,
+      logger,
+    });
+  if (xRocket)
+    routes[XROCKET_NOTIFY_PATH] = xRocketRoute({ xRocket, handle: handleXRocket, logger });
+  const webhookServer = Object.keys(routes).length
+    ? createWebhookServer({ http: config.http, routes, logger })
     : null;
   return { bot, broadcastQueue, webhookServer, delivery, logger };
 }

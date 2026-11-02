@@ -14,6 +14,7 @@ export default [
           'Buffer',
           'URL',
           'AbortController',
+          'AbortSignal',
           'setTimeout',
           'clearTimeout',
           'setInterval',

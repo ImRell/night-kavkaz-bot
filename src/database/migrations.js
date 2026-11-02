@@ -257,6 +257,46 @@ const migrations = [
   CREATE INDEX orders_open ON orders(telegram_id, product_id, method, status);
 `,
   },
+  {
+    version: 16,
+    sql: `
+  -- Оплата криптовалютой через xRocket. SQLite не меняет CHECK на месте:
+  -- orders пересобирается целиком (на неё никто не ссылается),
+  -- а в purchases колонка source заменяется, потому что на purchases ссылается orders.
+  CREATE TABLE orders_v16 (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    telegram_id TEXT NOT NULL REFERENCES users(telegram_id) ON DELETE RESTRICT,
+    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE RESTRICT,
+    product_title TEXT NOT NULL CHECK (length(trim(product_title)) BETWEEN 1 AND 200),
+    amount INTEGER NOT NULL CHECK (typeof(amount) = 'integer' AND amount > 0),
+    method TEXT NOT NULL CHECK (method IN ('stars', 'freekassa', 'xrocket')),
+    stars INTEGER CHECK (stars IS NULL OR (typeof(stars) = 'integer' AND stars > 0)),
+    crypto_amount TEXT,
+    crypto_currency TEXT,
+    external_id TEXT,
+    pay_url TEXT,
+    status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'paid', 'duplicate')),
+    payment_id TEXT,
+    purchase_id INTEGER REFERENCES purchases(id) ON DELETE RESTRICT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+    paid_at TEXT
+  );
+  INSERT INTO orders_v16 (id, telegram_id, product_id, product_title, amount, method, stars,
+    status, payment_id, purchase_id, created_at, paid_at)
+    SELECT id, telegram_id, product_id, product_title, amount, method, stars,
+      status, payment_id, purchase_id, created_at, paid_at FROM orders;
+  DROP TABLE orders;
+  ALTER TABLE orders_v16 RENAME TO orders;
+  CREATE UNIQUE INDEX orders_payment ON orders(method, payment_id) WHERE payment_id IS NOT NULL;
+  CREATE UNIQUE INDEX orders_external ON orders(method, external_id) WHERE external_id IS NOT NULL;
+  CREATE INDEX orders_open ON orders(telegram_id, product_id, method, status);
+  ALTER TABLE purchases ADD COLUMN source_v16 TEXT NOT NULL DEFAULT 'balance'
+    CHECK (source_v16 IN ('balance', 'stars', 'freekassa', 'xrocket', 'manual'));
+  UPDATE purchases SET source_v16 = source;
+  ALTER TABLE purchases DROP COLUMN source;
+  ALTER TABLE purchases RENAME COLUMN source_v16 TO source;
+`,
+  },
 ];
 export function migrateSchema(db) {
   db.exec('BEGIN IMMEDIATE');
